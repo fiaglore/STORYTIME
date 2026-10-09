@@ -26,7 +26,20 @@ Design doc: docs/design.md. Read it before changing game rules.
   `ending_id` must match an id listed in `src/content/chapters.json` for
   that chapter.
 - Mini-scenes are opted into with a `# scene: <name>` tag on the ink line
-  before the choice set; `StoryScreen.tsx` dispatches on that tag.
+  before the choice set; `RpgMap.tsx` dispatches on that tag.
+- Chapters are played as a 2D top-down RPG (`src/ui/RpgMap.tsx`), not a
+  scrolling visual novel. A `# stage: <charId>@<bgLocation>` tag says who's
+  visible and where; a `# spot: <hotspotId>` tag says which map hotspot is
+  "active" — the player must walk/click there to open the dialogue panel
+  for that knot's choices. `hotspotId` must be a key in `RpgMap.tsx`'s
+  `HOTSPOTS` map (currently Chapter 1's Oshodi market layout only — a new
+  chapter with a different setting needs its own hotspot map and
+  background art, or a second RpgMap-like component).
+- When a choice can lead to the *same* `spot` as the one just visited
+  (e.g. two consecutive knots both at "stall"), close the dialogue via the
+  choice handler itself, not an effect keyed on "did the spot id change" —
+  it won't change, and the dialogue will stay stuck open. This was a real
+  bug; see `handleChoose` in `RpgMap.tsx`.
 - Keep Nigerian Pidgin dialogue exactly as written; add glossary entries in
   `src/content/glossary.json` (not yet wired into a tappable UI — see Open
   questions in the design doc).
@@ -46,7 +59,7 @@ chapters/*.ink              one Ink file per chapter (source of truth)
 scripts/compile-ink.mjs     compiles chapters/*.ink -> src/content/compiled/*.json
 src/engine/                 inkRunner (React hook wrapping inkjs), Zustand store, saves
 src/scenes/                 mini-scene React components (frying, change-making, ...)
-src/ui/                     map hub, story screen, endings gallery, settings, etc.
+src/ui/                     map hub, RpgMap (chapter play screen), endings gallery, settings, etc.
 src/content/                chapter metadata (chapters.json), glossary.json, compiled ink JSON
 tests/                      Vitest engine tests + a manual Playwright e2e smoke script
 ```
@@ -60,7 +73,9 @@ tests/                      Vitest engine tests + a manual Playwright e2e smoke 
 3. Add the chapter's entry to `src/content/chapters.json` (id must match
    the ink filename without extension; endings array must match the
    `ending_id` tags used).
-4. If the chapter needs a mini-scene, add it to `src/scenes/` and wire the
-   tag name into `StoryScreen.tsx`'s scene dispatch.
+4. Add a hotspot map (location coordinates + a background image) for the
+   chapter's setting, and wire `# spot:`/`# stage:` tags accordingly. If
+   the chapter needs a mini-scene, add it to `src/scenes/` and wire the
+   tag name into the scene dispatch.
 5. Add a Vitest file under `tests/` that drives every ending to completion,
    following `tests/the-grind.test.ts`.

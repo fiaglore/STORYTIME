@@ -14,12 +14,14 @@ VAR ngozi_outcome = ""
 
 === opening ===
 # stage: ngozi@stall
+# spot: stall
 3:45 AM. Mushin never sleeps — and neither does Mama Ngozi.
 -> prepare
 
 === prepare ===
 # stage: ngozi@stall
 # scene: frying
+# spot: stall
 The beans are ready. How much do you fry today?
 + [Fry a small batch — safer, keep your strength]
     ~ batches = 2
@@ -41,6 +43,7 @@ The beans are ready. How much do you fry today?
 
 === commute ===
 # stage: ngozi@stall
+# spot: road
 Go-slow on the road to Oshodi, as always.
 * [Take the long way round, through the back streets]
     ~ profit -= 2
@@ -53,6 +56,7 @@ Go-slow on the road to Oshodi, as always.
 
 === morning_rush ===
 # stage: ngozi@stall
+# spot: stall
 Oshodi wakes up loud. "Mama Ngozi! Abeg!"
 By eight, your tray is {batches >= 4: already half gone} {batches == 3: moving steadily} {batches <= 2: lighter than you'd like}.
 -> help_traders
@@ -64,6 +68,7 @@ Jagaban's boys move through the market, notebook in hand.
 
 === help_tailor ===
 # stage: trader@stall
+# spot: tailor
 Baba Issa the tailor is short on his dues.
 + [Stand beside Baba Issa while he talks to them]
     ~ naira -= 3
@@ -76,6 +81,7 @@ Baba Issa the tailor is short on his dues.
 
 === help_okra ===
 # stage: trader@stall
+# spot: okra
 Aisha counts coins, short of what they're asking.
 + [Lend Aisha what she is short]
     ~ naira -= 5
@@ -88,6 +94,7 @@ Aisha counts coins, short of what they're asking.
 
 === help_mallam ===
 # stage: trader@stall
+# spot: mallam
 Old Mallam Sule stands his ground, arms folded.
 + [Walk over and stand with him, saying nothing]
     ~ solidarity += 1
@@ -99,11 +106,13 @@ Old Mallam Sule stands his ground, arms folded.
 
 === jagaban_visit ===
 # stage: jagaban@stall
+# spot: stall
 "Mama Ngozi." Jagaban says your name like he owns it. "Levy don increase small. Five hundred naira, two o'clock."
 -> chidinma_call
 
 === chidinma_call ===
 # stage: ngozi@stall
+# spot: stall
 Your phone rings. Chidinma — JAMB form money, due Friday.
 * ["Don't worry, I will find it. I promise."]
     ~ chidinma_told = "promise"
@@ -123,11 +132,13 @@ Your phone rings. Chidinma — JAMB form money, due Friday.
 === afternoon ===
 # stage: ngozi@stall
 # scene: changemaking
+# spot: stall
 Lunch rush, forty minutes before two o'clock finds you.
 -> confrontation
 
 === confrontation ===
 # stage: jagaban@confrontation
+# spot: stall
 Two o'clock. Jagaban arrives, notebook open. "So, Mama? Your five hundred naira ready?"
 + [Pay the ₦500]
     ~ naira -= 30

@@ -3,7 +3,7 @@ import { useGameStore } from "./engine/store";
 import { TitleScreen } from "./ui/TitleScreen";
 import { MapHub } from "./ui/MapHub";
 import { StorytimeOpening } from "./ui/StorytimeOpening";
-import { StoryScreen } from "./ui/StoryScreen";
+import { RpgMap } from "./ui/RpgMap";
 import { EndingScreen } from "./ui/EndingScreen";
 import { EndingsGallery } from "./ui/EndingsGallery";
 import { Settings } from "./ui/Settings";
@@ -95,7 +95,7 @@ export default function App() {
 
     case "story":
       return (
-        <StoryScreen
+        <RpgMap
           chapter={screen.chapter}
           storyJson={screen.storyJson}
           onEnding={(ending) => handleEnding(screen.chapter, ending)}

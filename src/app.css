@@ -249,45 +249,6 @@
   color: var(--chapter-accent, var(--text));
 }
 
-.sim-stage {
-  position: relative;
-  width: 100%;
-  aspect-ratio: 8 / 5;
-  border-radius: 0.75rem;
-  overflow: hidden;
-  border: 2px solid var(--chapter-accent, var(--border));
-  margin-top: 0.75rem;
-  background: var(--border);
-}
-
-.sim-stage__bg {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  image-rendering: pixelated;
-}
-
-.sim-stage__char {
-  position: absolute;
-  bottom: 4%;
-  left: 50%;
-  transform: translateX(-50%);
-  height: 62%;
-  width: auto;
-  image-rendering: pixelated;
-  filter: drop-shadow(0 4px 3px rgba(0, 0, 0, 0.35));
-}
-
-.story-screen__caption {
-  min-height: 3.4rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-  padding: 0.85rem 0;
-}
-
 .story-screen__paragraph {
   font-family: var(--font-serif);
   font-size: 1.05rem;
@@ -532,4 +493,107 @@
   align-items: center;
   gap: 0.6rem;
   margin-bottom: 0.6rem;
+}
+
+/* ---------- rpg map ---------- */
+
+.rpg-stage {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 480 / 304;
+  border-radius: 0.75rem;
+  overflow: hidden;
+  border: 2px solid var(--chapter-accent, var(--border));
+  margin-top: 0.75rem;
+  background: var(--border);
+  touch-action: none;
+}
+
+.rpg-stage__bg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  image-rendering: pixelated;
+}
+
+.rpg-stage__npc,
+.rpg-stage__player {
+  position: absolute;
+  height: 20%;
+  width: auto;
+  transform: translate(-50%, -92%);
+  image-rendering: pixelated;
+  filter: drop-shadow(0 3px 2px rgba(0, 0, 0, 0.35));
+}
+
+.rpg-stage__player {
+  transition: left 0.35s ease, top 0.35s ease;
+  z-index: 2;
+}
+
+.rpg-stage__npc {
+  z-index: 1;
+}
+
+.rpg-hotspot {
+  position: absolute;
+  width: 2.5rem;
+  height: 2.5rem;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  padding: 0;
+  z-index: 3;
+}
+
+.rpg-hotspot--inactive {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.rpg-hotspot__pulse {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 221, 128, 0.85), rgba(255, 221, 128, 0));
+  animation: rpg-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes rpg-pulse {
+  0%,
+  100% {
+    transform: scale(0.7);
+    opacity: 0.6;
+  }
+  50% {
+    transform: scale(1.15);
+    opacity: 1;
+  }
+}
+
+.rpg-hint {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  text-align: center;
+  padding: 0.6rem 0 0.2rem;
+}
+
+.rpg-dialogue {
+  border: 2px solid var(--chapter-accent, var(--border));
+  border-radius: 0.75rem;
+  padding: 1rem;
+  margin-top: 0.6rem;
+  background: var(--bg-elevated);
+}
+
+.rpg-dialogue__text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
 }

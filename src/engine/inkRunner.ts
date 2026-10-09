@@ -49,6 +49,7 @@ export interface InkStoryState {
   meters: MeterSnapshot;
   sceneTag: string | null;
   stageTag: string | null;
+  spotTag: string | null;
   ending: EndingInfo | null;
   error: string | null;
   choose: (index: number) => void;
@@ -65,6 +66,7 @@ export function useInkStory(
   const [meters, setMeters] = useState<MeterSnapshot>({});
   const [sceneTag, setSceneTag] = useState<string | null>(null);
   const [stageTag, setStageTag] = useState<string | null>(null);
+  const [spotTag, setSpotTag] = useState<string | null>(null);
   const [ending, setEnding] = useState<EndingInfo | null>(null);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -75,6 +77,7 @@ export function useInkStory(
       const collected: StoryLine[] = [];
       let lastSceneTag: string | null = null;
       let lastStageTag: string | null = null;
+      let lastSpotTag: string | null = null;
       let foundEnding: EndingInfo | null = null;
 
       try {
@@ -89,6 +92,8 @@ export function useInkStory(
           if (scene) lastSceneTag = scene;
           const stage = parseTaggedLine(tags, "stage:");
           if (stage) lastStageTag = stage;
+          const spot = parseTaggedLine(tags, "spot:");
+          if (spot) lastSpotTag = spot;
           if (text.trim().length > 0) {
             collected.push({ text: text.trim(), tags });
           }
@@ -110,6 +115,7 @@ export function useInkStory(
       setLines(collected);
       setSceneTag(lastSceneTag);
       setStageTag(lastStageTag);
+      setSpotTag(lastSpotTag);
       setMeters(readAllNumberVariables(story));
 
       if (foundEnding) {
@@ -155,5 +161,5 @@ export function useInkStory(
 
   const restart = () => setResetCount((n) => n + 1);
 
-  return { ready, lines, choices, meters, sceneTag, stageTag, ending, error, choose, restart };
+  return { ready, lines, choices, meters, sceneTag, stageTag, spotTag, ending, error, choose, restart };
 }

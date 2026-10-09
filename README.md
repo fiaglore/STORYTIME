@@ -1,8 +1,10 @@
 # STORYTIME: What Is It About Lagos?
 
 A web-based narrative choice game in seven playable chapters, one per
-story in the book *What Is It About Lagos*. Every choice costs you money
-(Naira) or costs you yourself (Spirit).
+story in the book *What Is It About Lagos*, played as a small 2D top-down
+RPG: walk your character around a pixel-art scene and interact with
+people to make each story's choices. Every choice costs you money (Naira)
+or costs you yourself (Spirit).
 
 Full design document: [`docs/design.md`](docs/design.md) (exported from
 the original GDD PDF, also kept at `docs/design.pdf`).
@@ -40,14 +42,20 @@ see the comment at the top of that file for how to run it.
 
 Story text and branching logic live entirely in `chapters/*.ink`, written
 in [Ink](https://www.inklestudios.com/ink/). The React app
-(`src/ui/StoryScreen.tsx`) never hard-codes narrative text — it just reads
+(`src/ui/RpgMap.tsx`) never hard-codes narrative text — it just reads
 whatever the current Ink line, choices and tagged meters are, via the
-`useInkStory` hook in `src/engine/inkRunner.ts`.
+`useInkStory` hook in `src/engine/inkRunner.ts`, and renders them as a
+dialogue panel the player opens by walking their pixel-art figurine to
+the right spot on the map.
 
 A few conventions, also documented in `CLAUDE.md`:
 
 - `# scene: <name>` tags on an Ink line before a choice set swap in a
   mini-scene component (`src/scenes/`) for that choice point.
+- `# stage: <charId>@<bgLocation>` says which character sprite is visible
+  and `# spot: <hotspotId>` says which map hotspot the player must reach
+  to open that knot's dialogue — both parsed the same way in
+  `inkRunner.ts`. `hotspotId` must exist in `RpgMap.tsx`'s `HOTSPOTS` map.
 - `# ending_id: <id>`, `# ending: <Title>`, `# verdict: <...>` and
   `# book_canon` tags mark an ending; `ending_id` must match an id in
   `src/content/chapters.json`.

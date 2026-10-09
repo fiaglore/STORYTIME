@@ -1,0 +1,98 @@
+[
+  {
+    "id": "the-grind",
+    "number": 1,
+    "title": "The Grind",
+    "protagonist": "Mama Ngozi",
+    "location": "Mushin to Oshodi",
+    "storyTime": "Year 0",
+    "color": "#C96A2B",
+    "contentNote": "Extortion, knife violence, serious injury.",
+    "inkFile": "01-the-grind.json",
+    "free": true,
+    "endings": [
+      { "id": "as_written", "title": "The Akara on the Ground", "bookCanon": true },
+      { "id": "paid_in_full", "title": "Paid in Full", "bookCanon": false },
+      { "id": "mile_12", "title": "Mile 12", "bookCanon": false },
+      { "id": "market_stands", "title": "The Market Stands", "bookCanon": false }
+    ]
+  },
+  {
+    "id": "ghost-of-marina",
+    "number": 2,
+    "title": "The Ghost of Marina",
+    "protagonist": "Tunde Adedapo",
+    "location": "Marina, Lagos Island",
+    "storyTime": "Undated",
+    "color": "#3C6E8F",
+    "contentNote": "Threats to family, implied disappearance, financial crime.",
+    "inkFile": "02-the-ghost-of-marina.json",
+    "free": false,
+    "endings": []
+  },
+  {
+    "id": "pastors-daughter",
+    "number": 3,
+    "title": "The Pastor's Daughter",
+    "protagonist": "Ifeoma Mbah",
+    "location": "Ikoyi and Yaba",
+    "storyTime": "Undated",
+    "color": "#C9A227",
+    "contentNote": "Same-sex relationship, religious condemnation, family rejection.",
+    "inkFile": "03-the-pastors-daughter.json",
+    "free": false,
+    "endings": []
+  },
+  {
+    "id": "danfo-diaries",
+    "number": 4,
+    "title": "Danfo Diaries",
+    "protagonist": "Dele",
+    "location": "Agege to CMS",
+    "storyTime": "Year 0, months later",
+    "color": "#D4B106",
+    "contentNote": "Police extortion, threatened assault.",
+    "inkFile": "04-danfo-diaries.json",
+    "free": false,
+    "endings": []
+  },
+  {
+    "id": "community-defender",
+    "number": 5,
+    "title": "The Community Defender",
+    "protagonist": "Mama Peju",
+    "location": "Isale Eko",
+    "storyTime": "Undated",
+    "color": "#4B3F8F",
+    "contentNote": "Forced eviction, crowd violence, arrests.",
+    "inkFile": "05-the-community-defender.json",
+    "free": false,
+    "endings": []
+  },
+  {
+    "id": "roots-and-thorns",
+    "number": 6,
+    "title": "Roots and Thorns",
+    "protagonist": "Emeka",
+    "location": "Yaba and Apapa",
+    "storyTime": "Year 15",
+    "color": "#8C5A3C",
+    "contentNote": "Corruption, bribery, financial ruin.",
+    "inkFile": "06-roots-and-thorns.json",
+    "free": false,
+    "endings": []
+  },
+  {
+    "id": "fabric-of-dreams",
+    "number": 7,
+    "title": "The Fabric of Dreams",
+    "protagonist": "Kosi",
+    "location": "Surulere",
+    "storyTime": "Undated",
+    "color": "#C2185B",
+    "contentNote": "Exploitation, design theft.",
+    "inkFile": "07-the-fabric-of-dreams.json",
+    "free": false,
+    "endings": []
+  }
+]

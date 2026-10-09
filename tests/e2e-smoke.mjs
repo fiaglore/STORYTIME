@@ -6,7 +6,7 @@
 //   node tests/e2e-smoke.mjs
 import { chromium } from "playwright";
 
-const baseUrl = process.env.E2E_URL || "http://127.0.0.1:4173/storytime/";
+const baseUrl = process.env.E2E_URL || "http://127.0.0.1:4173/STORYTIME/";
 const executablePath = process.env.E2E_CHROMIUM || "/opt/pw-browsers/chromium";
 
 const browser = await chromium.launch({ executablePath });

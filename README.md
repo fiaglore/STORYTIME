@@ -27,7 +27,7 @@ This compiles `chapters/*.ink` to `src/content/compiled/*.json` first
 |---|---|
 | `npm run dev` | Compile Ink, then start the dev server |
 | `npm run build` | Compile Ink, type-check, and build the production bundle to `dist/` |
-| `npm run preview` | Serve the built `dist/` locally, at the same `/storytime/` base path GitHub Pages uses |
+| `npm run preview` | Serve the built `dist/` locally, at the same `/STORYTIME/` base path GitHub Pages uses |
 | `npm test` | Run the Vitest suite — drives the compiled Ink directly to prove every ending in Chapter 1 is reachable |
 | `npm run compile:ink` | Compile `chapters/*.ink` to `src/content/compiled/*.json` on its own |
 | `npm run lint` | Oxlint |

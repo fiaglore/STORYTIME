@@ -249,19 +249,49 @@
   color: var(--chapter-accent, var(--text));
 }
 
-.story-screen__scroll {
-  flex: 1;
-  overflow-y: auto;
+.sim-stage {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 8 / 5;
+  border-radius: 0.75rem;
+  overflow: hidden;
+  border: 2px solid var(--chapter-accent, var(--border));
+  margin-top: 0.75rem;
+  background: var(--border);
+}
+
+.sim-stage__bg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  image-rendering: pixelated;
+}
+
+.sim-stage__char {
+  position: absolute;
+  bottom: 4%;
+  left: 50%;
+  transform: translateX(-50%);
+  height: 62%;
+  width: auto;
+  image-rendering: pixelated;
+  filter: drop-shadow(0 4px 3px rgba(0, 0, 0, 0.35));
+}
+
+.story-screen__caption {
+  min-height: 3.4rem;
   display: flex;
   flex-direction: column;
-  gap: 0.9rem;
-  padding: 1rem 0;
+  gap: 0.4rem;
+  padding: 0.85rem 0;
 }
 
 .story-screen__paragraph {
   font-family: var(--font-serif);
-  font-size: 1.1rem;
-  line-height: 1.6;
+  font-size: 1.05rem;
+  line-height: 1.5;
 }
 
 .story-screen__choices {

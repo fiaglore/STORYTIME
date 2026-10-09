@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useInkStory } from "../engine/inkRunner";
 import { MeterBar } from "./MeterBar";
+import { SimStage } from "./SimStage";
 import { FryingScene } from "../scenes/FryingScene";
 import { ChangeMakingScene } from "../scenes/ChangeMakingScene";
 import type { EndingInfo } from "../engine/inkRunner";
@@ -17,14 +18,16 @@ const CHAPTER_METERS: Record<string, { key: string; label: string }> = {
   "the-grind": { key: "profit", label: "Profit" },
 };
 
+const DEFAULT_STAGE = "ngozi@stall";
+
 export function StoryScreen({ chapter, storyJson, onEnding, onExit }: Props) {
-  const { ready, lines, choices, meters, sceneTag, ending, error, choose } =
+  const { ready, lines, choices, meters, sceneTag, stageTag, ending, error, choose } =
     useInkStory(storyJson);
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const textRef = useRef<HTMLDivElement>(null);
   const reportedEndingId = useRef<string | null>(null);
 
   useEffect(() => {
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
+    textRef.current?.scrollTo({ top: 0 });
   }, [lines]);
 
   useEffect(() => {
@@ -54,6 +57,11 @@ export function StoryScreen({ chapter, storyJson, onEnding, onExit }: Props) {
     ? { label: chapterMeterDef.label, value: meters[chapterMeterDef.key] ?? 0 }
     : undefined;
 
+  const [charId, bgId] = (stageTag ?? DEFAULT_STAGE).split("@");
+  // Keep only the last couple of beats on screen — a caption log, not a
+  // scrolling novel — to match the simulation framing the stage sets up.
+  const visibleLines = lines.slice(-2);
+
   return (
     <div className="story-screen" style={{ ["--chapter-accent" as string]: chapter.color }}>
       <header className="story-screen__header">
@@ -65,8 +73,10 @@ export function StoryScreen({ chapter, storyJson, onEnding, onExit }: Props) {
 
       <MeterBar naira={meters.naira ?? 0} spirit={meters.spirit ?? 0} chapterMeter={chapterMeter} />
 
-      <div className="story-screen__scroll" ref={scrollRef}>
-        {lines.map((line, i) => (
+      <SimStage charId={charId} bgId={bgId} />
+
+      <div className="story-screen__caption" ref={textRef}>
+        {visibleLines.map((line, i) => (
           <p key={i} className="story-screen__paragraph">
             {line.text}
           </p>

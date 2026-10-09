@@ -48,6 +48,7 @@ export interface InkStoryState {
   choices: StoryChoice[];
   meters: MeterSnapshot;
   sceneTag: string | null;
+  stageTag: string | null;
   ending: EndingInfo | null;
   error: string | null;
   choose: (index: number) => void;
@@ -63,6 +64,7 @@ export function useInkStory(
   const [choices, setChoices] = useState<StoryChoice[]>([]);
   const [meters, setMeters] = useState<MeterSnapshot>({});
   const [sceneTag, setSceneTag] = useState<string | null>(null);
+  const [stageTag, setStageTag] = useState<string | null>(null);
   const [ending, setEnding] = useState<EndingInfo | null>(null);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -71,14 +73,22 @@ export function useInkStory(
   const advance = useMemo(
     () => (story: Story) => {
       const collected: StoryLine[] = [];
-      let lastTags: string[] = [];
+      let lastSceneTag: string | null = null;
+      let lastStageTag: string | null = null;
       let foundEnding: EndingInfo | null = null;
 
       try {
         while (story.canContinue) {
           const text = story.Continue() ?? "";
           const tags = story.currentTags ?? [];
-          if (tags.length > 0) lastTags = tags;
+          // Each tag kind is tracked independently (not just "the last
+          // line's tags") because a later line may carry one tag kind
+          // without the other — e.g. a scene: tag with no stage: tag on
+          // the same line shouldn't clear a stage set earlier.
+          const scene = parseTaggedLine(tags, "scene:");
+          if (scene) lastSceneTag = scene;
+          const stage = parseTaggedLine(tags, "stage:");
+          if (stage) lastStageTag = stage;
           if (text.trim().length > 0) {
             collected.push({ text: text.trim(), tags });
           }
@@ -98,8 +108,8 @@ export function useInkStory(
       }
 
       setLines(collected);
-      const scene = parseTaggedLine(lastTags, "scene:");
-      setSceneTag(scene);
+      setSceneTag(lastSceneTag);
+      setStageTag(lastStageTag);
       setMeters(readAllNumberVariables(story));
 
       if (foundEnding) {
@@ -145,5 +155,5 @@ export function useInkStory(
 
   const restart = () => setResetCount((n) => n + 1);
 
-  return { ready, lines, choices, meters, sceneTag, ending, error, choose, restart };
+  return { ready, lines, choices, meters, sceneTag, stageTag, ending, error, choose, restart };
 }

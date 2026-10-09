@@ -29,6 +29,13 @@ jobs:
       - run: npm test
       - run: npm run build
 
+      - name: Debug - verify built output
+        run: |
+          echo "--- dist/ listing ---"
+          find dist -maxdepth 2
+          echo "--- dist/index.html contents ---"
+          cat dist/index.html
+
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

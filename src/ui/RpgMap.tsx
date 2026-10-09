@@ -64,6 +64,15 @@ export function RpgMap({ chapter, storyJson, onEnding, onExit }: Props) {
   const walkTimeout = useRef<number | null>(null);
   const [charId, npcSpot] = (stageTag ?? "ngozi@stall").split("@");
 
+  // Mama Ngozi is the player — when she's the one "on stage" we pose the
+  // player sprite itself (e.g. ngozi-fry) instead of drawing a second,
+  // overlapping figurine. A separate NPC figurine only appears for
+  // someone else (Jagaban, a trader).
+  const playerIsSpeaker = charId.startsWith("ngozi");
+  const playerSprite = playerIsSpeaker ? charId : "ngozi";
+  const npcSpotInfo = HOTSPOTS[npcSpot] ?? HOTSPOTS.stall;
+  const speakerPos = playerIsSpeaker ? playerPos : { x: npcSpotInfo.x, y: npcSpotInfo.npcY };
+
   useEffect(() => {
     return () => {
       if (walkTimeout.current !== null) window.clearTimeout(walkTimeout.current);
@@ -151,8 +160,14 @@ export function RpgMap({ chapter, storyJson, onEnding, onExit }: Props) {
     ? { label: chapterMeterDef.label, value: meters[chapterMeterDef.key] ?? 0 }
     : undefined;
 
-  const npc = HOTSPOTS[npcSpot] ?? HOTSPOTS.stall;
-  const visibleLines = lines.slice(-2);
+  const latestLine = lines[lines.length - 1]?.text ?? "";
+  const activeHotspot = HOTSPOTS[activeSpot];
+  // The bubble is re-centered away from the speaker's exact position when
+  // they're near a stage edge (x) or low enough to sit under the choice
+  // sheet (y, which covers the bottom ~72% of the stage) — otherwise it
+  // clips off-screen or renders invisibly behind the sheet.
+  const bubbleX = Math.min(75, Math.max(25, speakerPos.x));
+  const bubbleY = Math.min(speakerPos.y, 26);
 
   return (
     <div className="story-screen" style={{ ["--chapter-accent" as string]: chapter.color }}>
@@ -178,62 +193,64 @@ export function RpgMap({ chapter, storyJson, onEnding, onExit }: Props) {
             aria-label={id === activeSpot ? `Walk to ${spot.label}` : spot.label}
           >
             {id === activeSpot && !dialogueOpen && !walking && (
-              <span className="rpg-hotspot__pulse" />
+              <>
+                <span className="rpg-hotspot__pulse" />
+                <span className="rpg-hotspot__label">{spot.label}</span>
+              </>
             )}
           </button>
         ))}
 
-        <img
-          className="rpg-stage__npc"
-          style={{ left: `${npc.x}%`, top: `${npc.npcY}%` }}
-          src={`${base}${CHARACTERS[charId]?.slice(1) ?? "sprites/ngozi.png"}`}
-          alt={charId}
-        />
+        {!playerIsSpeaker && (
+          <img
+            className="rpg-stage__npc"
+            style={{ left: `${npcSpotInfo.x}%`, top: `${npcSpotInfo.npcY}%` }}
+            src={`${base}${CHARACTERS[charId]?.slice(1) ?? "sprites/trader.png"}`}
+            alt={charId}
+          />
+        )}
 
         <img
           className="rpg-stage__player"
           style={{ left: `${playerPos.x}%`, top: `${playerPos.y}%` }}
-          src={`${base}sprites/ngozi.png`}
+          src={`${base}${CHARACTERS[playerSprite]?.slice(1) ?? "sprites/ngozi.png"}`}
           alt="Mama Ngozi"
         />
-      </div>
 
-      {!dialogueOpen && !ending && (
-        <p className="rpg-hint">
-          Walk to <strong>{HOTSPOTS[activeSpot].label}</strong> — arrow keys/WASD move, or tap the
-          glowing spot.
-        </p>
-      )}
-
-      {dialogueOpen && !ending && (
-        <div className="rpg-dialogue">
-          <div className="rpg-dialogue__text">
-            {visibleLines.map((line, i) => (
-              <p key={i} className="story-screen__paragraph">
-                {line.text}
-              </p>
-            ))}
+        {dialogueOpen && !ending && latestLine && (
+          <div className="rpg-bubble" style={{ left: `${bubbleX}%`, top: `${bubbleY}%` }}>
+            {latestLine}
           </div>
+        )}
 
-          {sceneTag === "frying" && <FryingScene choices={choices} onChoose={handleChoose} />}
-          {sceneTag === "changemaking" && (
-            <ChangeMakingScene choices={choices} onChoose={handleChoose} />
-          )}
-          {sceneTag !== "frying" && sceneTag !== "changemaking" && (
-            <div className="story-screen__choices">
-              {choices.map((choice) => (
-                <button
-                  key={choice.index}
-                  className="choice-button"
-                  onClick={() => handleChoose(choice.index)}
-                >
-                  {choice.text}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+        {dialogueOpen && !ending && (
+          <div className="rpg-sheet">
+            {sceneTag === "frying" && <FryingScene choices={choices} onChoose={handleChoose} />}
+            {sceneTag === "changemaking" && (
+              <ChangeMakingScene choices={choices} onChoose={handleChoose} />
+            )}
+            {sceneTag !== "frying" && sceneTag !== "changemaking" && (
+              <div className="rpg-sheet__choices">
+                {choices.map((choice) => (
+                  <button
+                    key={choice.index}
+                    className="rpg-choice-pill"
+                    onClick={() => handleChoose(choice.index)}
+                  >
+                    {choice.text}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {!dialogueOpen && !ending && (
+          <div className="rpg-goal">
+            Go to <strong>{activeHotspot.label}</strong>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

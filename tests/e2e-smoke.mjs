@@ -24,10 +24,10 @@ page.on("pageerror", (err) => {
   console.log("PAGE ERROR:", err.message);
 });
 
-// Clicks the glowing active hotspot, waits for the dialogue panel to open.
+// Clicks the glowing active hotspot, waits for the choice sheet to open.
 async function walkAndOpen() {
   await page.click(".rpg-hotspot--active");
-  await page.waitForSelector(".rpg-dialogue", { timeout: 5000 });
+  await page.waitForSelector(".rpg-sheet", { timeout: 5000 });
 }
 
 await page.goto(baseUrl);

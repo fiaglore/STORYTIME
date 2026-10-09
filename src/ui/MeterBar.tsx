@@ -31,8 +31,8 @@ interface MeterBarProps {
 export function MeterBar({ naira, spirit, chapterMeter }: MeterBarProps) {
   return (
     <div className="meter-bar">
-      <Meter label="Naira" value={naira} accent="#C9A227" />
-      <Meter label="Spirit" value={spirit} accent="#3C6E8F" />
+      <Meter label="Naira" value={naira} accent="var(--naira)" />
+      <Meter label="Spirit" value={spirit} accent="var(--spirit)" />
       {chapterMeter && (
         <div className="meter meter--chapter">
           <div className="meter__labelRow">

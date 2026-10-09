@@ -1,4 +1,4 @@
-# STORYTIME: Lagos
+# STORYTIME: What Is It About Lagos?
 
 Narrative choice game, companion to the book "What Is It About Lagos".
 Design doc: docs/design.md. Read it before changing game rules.

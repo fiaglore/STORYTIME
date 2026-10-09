@@ -12,7 +12,7 @@ export default defineConfig(({ command, isPreview }) => ({
       registerType: "autoUpdate",
       includeAssets: ["favicon.svg"],
       manifest: {
-        name: "STORYTIME: Lagos",
+        name: "STORYTIME: What Is It About Lagos?",
         short_name: "Storytime Lagos",
         description:
           "A narrative choice game companion to the book What Is It About Lagos.",

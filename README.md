@@ -1,4 +1,4 @@
-# STORYTIME: Lagos
+# STORYTIME: What Is It About Lagos?
 
 A web-based narrative choice game in seven playable chapters, one per
 story in the book *What Is It About Lagos*. Every choice costs you money

@@ -23,7 +23,7 @@ export function MapHub({ onSelect, onOpenEndings, onOpenSettings }: Props) {
     <div className="map-hub">
       <header className="map-hub__header">
         <div>
-          <h1>STORYTIME: Lagos</h1>
+          <h1>STORYTIME: What Is It About Lagos?</h1>
           <p className="map-hub__subtitle">Seven people. One city. Every choice costs you.</p>
         </div>
         <div className="map-hub__actions">

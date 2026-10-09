@@ -20,7 +20,7 @@ export function TitleScreen({ onEnter }: Props) {
   if (showGate) {
     return (
       <div className="title-screen">
-        <h1 className="title-screen__logo">STORYTIME: Lagos</h1>
+        <h1 className="title-screen__logo">STORYTIME: What Is It About Lagos?</h1>
         <div className="age-gate">
           <p>
             This game contains mature themes: extortion, violence, discrimination and
@@ -37,14 +37,14 @@ export function TitleScreen({ onEnter }: Props) {
 
   return (
     <div className="title-screen">
-      <h1 className="title-screen__logo">STORYTIME: Lagos</h1>
+      <h1 className="title-screen__logo">STORYTIME: What Is It About Lagos?</h1>
       <p className="title-screen__tagline">
         Seven people. One city. Every choice costs you money or costs you yourself.
       </p>
       <button className="choice-button choice-button--primary" onClick={onEnter}>
         Enter Lagos
       </button>
-      <p className="title-screen__companion">A companion to the book <em>What Is It About Lagos</em></p>
+      <p className="title-screen__companion">A companion to the book</p>
     </div>
   );
 }

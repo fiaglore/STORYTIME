@@ -332,7 +332,25 @@ export function resolveEvent(
   const choice = event.choices[choiceIndex];
   if (!choice || !isChoiceAvailable(character, choice)) return character;
   const prevNaira = character.stats.naira;
-  const stats = applyDelta(character.stats, choice.delta);
+  let stats = applyDelta(character.stats, choice.delta);
+  let resultLine = choice.result;
+  let fatalOverride: string | null = null;
+
+  // "Choosing a risky option could kill or maim them" — rolled once, on
+  // top of the choice's normal delta, only for choices that opt into it
+  // (see EventRisk in lifeEvents.ts). A fatal roll overrides the choice's
+  // own result line with the risk's deathResult; a maiming roll applies an
+  // extra harsh delta and appends its own line rather than replacing the
+  // choice's result, since the character survives to read both.
+  if (choice.risk && Math.random() < choice.risk.chance) {
+    if (Math.random() < choice.risk.fatalShare) {
+      fatalOverride = choice.risk.deathResult;
+    } else {
+      stats = applyDelta(stats, choice.risk.maimDelta);
+      resultLine = `${resultLine} ${choice.risk.maimResult}`;
+    }
+  }
+
   // Streak is a once-a-year resilience check (see ageUp) — an event's
   // immediate stat hit doesn't tick it on its own, or players who hit an
   // event most years would rack up roughly double the "years" they lived.
@@ -347,15 +365,59 @@ export function resolveEvent(
     seenEventIds: character.seenEventIds.includes(event.id)
       ? character.seenEventIds
       : [...character.seenEventIds, event.id],
-    log: [...character.log, `Age ${character.age}: ${choice.result}`],
+    log: [...character.log, `Age ${character.age}: ${resultLine}`],
   };
-  const cause = checkDeath(next);
+  const cause = fatalOverride ?? checkDeath(next);
   if (cause) {
     next.alive = false;
     next.deathCause = cause;
     next.log = [...next.log, `Age ${character.age}: ${character.name} has passed away. ${cause}`];
   }
   return next;
+}
+
+// Flat cost to revive a dead character — a steep, realistic private-
+// hospital-and-miracle-worker bill, not a rounding error (see the fuel-
+// price-anchored economy note at the top of lifeEvents.ts). Refuses
+// (rather than throws) if the character is alive or can't afford it, same
+// "refuse rather than throw" shape as every other gated mutator here.
+export const REVIVE_COST = 400_000;
+
+export function reviveCharacter(character: LifeCharacter): LifeCharacter {
+  if (character.alive || character.stats.naira < REVIVE_COST) return character;
+  const prevNaira = character.stats.naira;
+  const stats = applyDelta(
+    { ...character.stats, naira: character.stats.naira - REVIVE_COST },
+    { health: 40 },
+  );
+  return {
+    ...character,
+    alive: true,
+    deathCause: null,
+    stats,
+    ...trackNaira(character, prevNaira, stats.naira),
+    log: [...character.log, `Age ${character.age}: A huge hospital bill later, ${character.name} is back.`],
+  };
+}
+
+// Below this, a maimed-but-alive character can pay for proper treatment —
+// the other half of "choosing a risky option ... could cause them money to
+// revive" (death isn't the only outcome that costs naira to recover from).
+export const CRITICAL_HEALTH_THRESHOLD = 20;
+export const TREATMENT_COST = 150_000;
+
+export function treatInjury(character: LifeCharacter): LifeCharacter {
+  if (character.stats.health >= CRITICAL_HEALTH_THRESHOLD || character.stats.naira < TREATMENT_COST) {
+    return character;
+  }
+  const prevNaira = character.stats.naira;
+  const stats = applyDelta(character.stats, { naira: -TREATMENT_COST, health: 35 });
+  return {
+    ...character,
+    stats,
+    ...trackNaira(character, prevNaira, stats.naira),
+    log: [...character.log, `Age ${character.age}: Paid for proper treatment and started healing.`],
+  };
 }
 
 // Applies one small no-choice daily task (see content/chores.ts) — unlike

@@ -26,6 +26,20 @@ export interface StatDelta {
   naira?: number;
 }
 
+// A choice tagged with risk can, on top of its normal delta, maim or kill
+// the character outright — see resolveEvent in lifeSim.ts. chance is the
+// odds (0-1) the risky outcome fires at all; of those, fatalShare is the
+// odds it's fatal rather than "merely" a maiming. Both outcomes can be
+// recovered from for naira — see REVIVE_COST/reviveCharacter and
+// CRITICAL_HEALTH_THRESHOLD/treatInjury in lifeSim.ts.
+export interface EventRisk {
+  chance: number;
+  fatalShare: number;
+  maimDelta: StatDelta;
+  maimResult: string;
+  deathResult: string;
+}
+
 export interface EventChoice {
   label: string;
   result: string;
@@ -41,6 +55,11 @@ export interface EventChoice {
   requiresNaira?: number;
   // Resolving this choice adds this asset to the character permanently.
   grantsAsset?: AssetId;
+  // The "choosing a risky option could kill or maim them" gate — see
+  // EventRisk above. Most choices don't carry this; it's reserved for
+  // choices whose flavor text is already describing real danger (racing
+  // through traffic, defying armed men, chasing a thief into a crowd).
+  risk?: EventRisk;
 }
 
 export interface LifeEvent {
@@ -162,6 +181,13 @@ export const LIFE_EVENTS: LifeEvent[] = [
         label: "Take the money just once",
         result: "₦25,000 in your hand feels good. The debt they expect back does not.",
         delta: { naira: 25000, happiness: -3, health: -1 },
+        risk: {
+          chance: 0.18,
+          fatalShare: 0.15,
+          maimDelta: { health: -35, happiness: -15 },
+          maimResult: "A \"debt collection\" turns violent — you're badly beaten before they let you go.",
+          deathResult: "The debt collection goes too far. You don't survive it.",
+        },
       },
     ],
   },
@@ -315,6 +341,13 @@ export const LIFE_EVENTS: LifeEvent[] = [
         label: "Try an okada through the gaps",
         result: "Terrifying, but you make it on time, heart pounding.",
         delta: { naira: -500, happiness: 1, health: -2 },
+        risk: {
+          chance: 0.12,
+          fatalShare: 0.2,
+          maimDelta: { health: -40, looks: -10 },
+          maimResult: "The okada clips a danfo's mirror and you go down hard on the asphalt.",
+          deathResult: "The okada doesn't make it through the gap. Neither do you.",
+        },
       },
       {
         label: "Accept you'll be late",
@@ -648,6 +681,13 @@ export const LIFE_EVENTS: LifeEvent[] = [
         label: "Chase after them, shouting \"Ole!\"",
         result: "You don't catch them, and now you're bruised from the scramble too.",
         delta: { naira: -3000, health: -2, happiness: -2 },
+        risk: {
+          chance: 0.1,
+          fatalShare: 0.1,
+          maimDelta: { health: -30 },
+          maimResult: "The crowd turns into a mob and you get caught in the chaos of \"jungle justice\".",
+          deathResult: "The mob scene turns deadly before anyone can pull you out of it.",
+        },
       },
       {
         label: "Let it go — it's already gone",
@@ -723,6 +763,54 @@ export const LIFE_EVENTS: LifeEvent[] = [
         label: "Skip it this year",
         result: "Word travels fast back home. You'll hear about this one.",
         delta: { happiness: -2 },
+      },
+    ],
+  },
+  {
+    id: "armed-robbery",
+    bands: ["adult"],
+    prompt: "Armed men stop your car at a quiet junction. \"Oga, everything you get, bring am.\"",
+    choices: [
+      {
+        label: "Hand over your phone and cash quietly",
+        result: "They take what you have and vanish into the dark. You're shaken but unharmed.",
+        delta: { naira: -12000, happiness: -4 },
+      },
+      {
+        label: "Try to drive off before they react",
+        result: "Tyres screaming, you make it out — this time.",
+        delta: { happiness: 3 },
+        risk: {
+          chance: 0.25,
+          fatalShare: 0.3,
+          maimDelta: { health: -45, looks: -10 },
+          maimResult: "A shot hits the car as you speed off — you make it to a hospital, barely.",
+          deathResult: "The getaway doesn't work. The robbers don't miss.",
+        },
+      },
+    ],
+  },
+  {
+    id: "okada-race-dare",
+    bands: ["teen"],
+    prompt: "Your friends dare you to race okadas down a stretch of the expressway after school.",
+    choices: [
+      {
+        label: "Sit this one out",
+        result: "They call you soft for a week, then forget about it.",
+        delta: { happiness: -2 },
+      },
+      {
+        label: "Race — you're not backing down",
+        result: "Wind in your face, heart pounding — you win, barely, and walk away grinning.",
+        delta: { happiness: 4, looks: 1 },
+        risk: {
+          chance: 0.15,
+          fatalShare: 0.25,
+          maimDelta: { health: -35, looks: -15 },
+          maimResult: "You lose control at speed and go down hard on the tarmac.",
+          deathResult: "You lose control at speed. There's no walking away from this one.",
+        },
       },
     ],
   },

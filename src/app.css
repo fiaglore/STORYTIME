@@ -1009,6 +1009,23 @@
   margin: 0;
 }
 
+.lifesim-critical {
+  margin-top: 0.75rem;
+  padding: 0.85rem 1rem;
+  border-radius: 0.75rem;
+  border: 2px solid var(--danger);
+  background: var(--bg-elevated);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.lifesim-critical__text {
+  color: var(--danger);
+  font-weight: 700;
+  margin: 0;
+}
+
 .lifesim-prayer {
   margin-top: 0.75rem;
   display: flex;

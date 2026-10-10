@@ -14,13 +14,18 @@ import {
   pray,
   resolveChore,
   resolveEvent,
+  reviveCharacter,
   rollWealthTier,
   takeJob,
+  treatInjury,
   MAX_PRAYERS_PER_YEAR,
   trainSkill,
   AGE_UP_REQUIREMENTS,
+  CRITICAL_HEALTH_THRESHOLD,
   JOBS,
   MAX_HUSTLES_PER_YEAR,
+  REVIVE_COST,
+  TREATMENT_COST,
   type LifeCharacter,
   type JobId,
   type FaithId,
@@ -237,6 +242,16 @@ export function LifeSim({ onExit }: Props) {
     setPendingJob(null);
   };
 
+  const handleRevive = () => {
+    if (!character) return;
+    setCharacter(reviveCharacter(character));
+  };
+
+  const handleTreatInjury = () => {
+    if (!character) return;
+    setCharacter(treatInjury(character));
+  };
+
   const startNewLife = () => {
     setCharacter(null);
     setNameInput("");
@@ -394,6 +409,11 @@ export function LifeSim({ onExit }: Props) {
               </p>
             ))}
           </div>
+          {character.stats.naira >= REVIVE_COST && (
+            <button className="choice-button" onClick={handleRevive}>
+              Pay ₦{REVIVE_COST.toLocaleString()} to revive
+            </button>
+          )}
           <button className="choice-button choice-button--primary" onClick={startNewLife}>
             Live a new life
           </button>
@@ -483,6 +503,21 @@ export function LifeSim({ onExit }: Props) {
           </span>
         </div>
       </div>
+
+      {character.stats.health < CRITICAL_HEALTH_THRESHOLD && (
+        <div className="lifesim-critical">
+          <p className="lifesim-critical__text">
+            Your health is critical — you're badly hurt and need proper treatment.
+          </p>
+          <button
+            className="choice-button choice-button--primary"
+            onClick={handleTreatInjury}
+            disabled={character.stats.naira < TREATMENT_COST}
+          >
+            Pay ₦{TREATMENT_COST.toLocaleString()} for treatment
+          </button>
+        </div>
+      )}
 
       <p className="lifesim-job">{job ? `Working as a ${job.title}` : "No job yet"}</p>
 

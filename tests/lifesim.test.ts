@@ -14,13 +14,17 @@ import {
   pray,
   resolveChore,
   resolveEvent,
+  reviveCharacter,
   rollWealthTier,
   takeJob,
+  treatInjury,
   trainSkill,
   unblockPlayer,
   AGE_UP_REQUIREMENTS,
   MAX_HUSTLES_PER_YEAR,
   MAX_PRAYERS_PER_YEAR,
+  REVIVE_COST,
+  TREATMENT_COST,
   type LifeCharacter,
 } from "../src/engine/lifeSim";
 import { WEALTH_TIERS } from "../src/content/characterCreation";
@@ -133,6 +137,109 @@ describe("resolveEvent", () => {
     const c = baseCharacter({ streak: 3, stats: { happiness: 50, health: 40, smarts: 50, looks: 50, naira: 0 } });
     const next = resolveEvent(c, event, 0);
     expect(next.streak).toBe(3);
+  });
+});
+
+describe("risky choices (EventRisk)", () => {
+  it("a risk chance of 0 never maims or kills beyond the choice's own delta", () => {
+    const event = {
+      ...LIFE_EVENTS[0],
+      choices: [
+        {
+          label: "x",
+          result: "safe",
+          delta: { happiness: 1 },
+          risk: { chance: 0, fatalShare: 1, maimDelta: { health: -99 }, maimResult: "maimed", deathResult: "dead" },
+        },
+      ],
+    };
+    const c = baseCharacter({ stats: { happiness: 50, health: 50, smarts: 50, looks: 50, naira: 0 } });
+    const next = resolveEvent(c, event, 0);
+    expect(next.alive).toBe(true);
+    expect(next.stats.health).toBe(50);
+  });
+
+  it("a risk chance of 1 with fatalShare 1 always kills, overriding the choice's own result line", () => {
+    const event = {
+      ...LIFE_EVENTS[0],
+      choices: [
+        {
+          label: "x",
+          result: "safe-sounding text",
+          delta: { happiness: 1 },
+          risk: { chance: 1, fatalShare: 1, maimDelta: { health: -99 }, maimResult: "maimed", deathResult: "fatal risk text" },
+        },
+      ],
+    };
+    const c = baseCharacter();
+    const next = resolveEvent(c, event, 0);
+    expect(next.alive).toBe(false);
+    expect(next.deathCause).toBe("fatal risk text");
+  });
+
+  it("a risk chance of 1 with fatalShare 0 always maims (applies the extra delta, stays alive)", () => {
+    const event = {
+      ...LIFE_EVENTS[0],
+      choices: [
+        {
+          label: "x",
+          result: "ok",
+          delta: { happiness: 1 },
+          risk: { chance: 1, fatalShare: 0, maimDelta: { health: -30 }, maimResult: "ouch", deathResult: "dead" },
+        },
+      ],
+    };
+    const c = baseCharacter({ stats: { happiness: 50, health: 50, smarts: 50, looks: 50, naira: 0 } });
+    const next = resolveEvent(c, event, 0);
+    expect(next.alive).toBe(true);
+    expect(next.stats.health).toBe(20);
+    expect(next.log.at(-1)).toContain("ouch");
+  });
+});
+
+describe("reviveCharacter", () => {
+  it("revives a dead character who can afford it, deducting the cost and restoring some health", () => {
+    const dead = baseCharacter({
+      alive: false,
+      deathCause: "something",
+      stats: { happiness: 50, health: 0, smarts: 50, looks: 50, naira: REVIVE_COST + 10_000 },
+    });
+    const next = reviveCharacter(dead);
+    expect(next.alive).toBe(true);
+    expect(next.deathCause).toBeNull();
+    expect(next.stats.naira).toBe(10_000);
+    expect(next.stats.health).toBeGreaterThan(0);
+  });
+
+  it("refuses to revive if the character can't afford it", () => {
+    const dead = baseCharacter({ alive: false, deathCause: "x", stats: { happiness: 50, health: 0, smarts: 50, looks: 50, naira: 100 } });
+    expect(reviveCharacter(dead)).toBe(dead);
+  });
+
+  it("refuses to revive an already-alive character", () => {
+    const alive = baseCharacter({ stats: { happiness: 50, health: 50, smarts: 50, looks: 50, naira: 10_000_000 } });
+    expect(reviveCharacter(alive)).toBe(alive);
+  });
+});
+
+describe("treatInjury", () => {
+  it("heals a critically injured character who can afford it", () => {
+    const hurt = baseCharacter({
+      stats: { happiness: 50, health: 5, smarts: 50, looks: 50, naira: TREATMENT_COST + 5000 },
+    });
+    const next = treatInjury(hurt);
+    expect(next.stats.health).toBeGreaterThan(5);
+    expect(next.stats.naira).toBe(5000);
+  });
+
+  it("refuses when health isn't critical", () => {
+    const healthy = baseCharacter({ stats: { happiness: 50, health: 50, smarts: 50, looks: 50, naira: 1_000_000 } });
+    expect(treatInjury(healthy)).toBe(healthy);
+  });
+
+  it("refuses when the character can't afford treatment", () => {
+    const poor = baseCharacter({ stats: { happiness: 50, health: 5, smarts: 50, looks: 50, naira: 100 } });
+    expect(treatInjury(poor)).toBe(poor);
   });
 });
 

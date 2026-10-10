@@ -35,6 +35,24 @@ the single surviving mode, `src/ui/LifeSim.tsx`.
   `birthDate`/`faith` are stored on `LifeCharacter` but are flavor/display
   only — age still starts at 0 and advances via Age Up regardless of the
   chosen birth date.
+- A handful of event choices whose flavor text already describes real
+  danger (racing an okada, defying armed robbers, chasing a thief into a
+  crowd, taking cult "protection" money) carry an optional `risk` field
+  (`EventRisk` in `lifeEvents.ts`) resolved once in `resolveEvent` on top
+  of the choice's normal delta: `chance` is the odds the risk fires at
+  all, `fatalShare` is the odds (of those) it's fatal rather than a
+  maiming. A fatal roll overrides the choice's own result line with the
+  risk's `deathResult` and kills the character exactly like a natural
+  `checkDeath` death; a maiming roll applies an extra harsh `StatDelta`
+  (big health/looks hit) and appends `maimResult` to the normal result
+  line — the character stays alive. Both are recoverable for naira:
+  `reviveCharacter`/`REVIVE_COST` brings a dead character back (shown as a
+  "Pay to revive" button on the obituary screen, only when affordable);
+  `treatInjury`/`TREATMENT_COST`/`CRITICAL_HEALTH_THRESHOLD` heals a
+  maimed-but-alive character whose health has dropped critically low
+  (shown as a banner in the main play screen). Most event choices don't
+  carry `risk` at all — reserve it for choices already describing genuine
+  danger, not routine costs.
 - Pray / "speak with your God" (`pray()` in `lifeSim.ts`, the always-visible
   button in `LifeSim.tsx` just under the job line) is capped per year
   (`MAX_PRAYERS_PER_YEAR`, same shape as `hustle()`) and resolves on a flat

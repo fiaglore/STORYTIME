@@ -80,21 +80,44 @@ export function LifeSimSocial({ character, uid, onUpdateCharacter }: Props) {
   useEffect(() => watchOutgoingProposals(uid, setOutgoingProposals), [uid]);
   useEffect(() => watchIncomingTransfers(uid, setIncomingTransfers), [uid]);
 
-  // Credit each unclaimed transfer exactly once — claimedTransferIds guards
-  // against re-applying one between the moment we credit it locally and
-  // the moment claimMoneyTransfer's write is actually confirmed back by
-  // the next snapshot (same race the marriage proposal effect below
-  // guards against with marriedFromProposal).
+  // Claim first, credit only on a won claim — claimMoneyTransfer is now an
+  // atomic Firestore transaction that flips claimed only if it's still
+  // false and reports whether this call was the one that did it (see
+  // firebase.ts). Crediting used to run ahead of that confirmation
+  // (apply receiveMoney locally, then fire off claimMoneyTransfer without
+  // waiting), which could double-credit the same transfer: two signed-in
+  // tabs/devices both watching it, or a reload landing between the local
+  // credit and claimMoneyTransfer's write actually confirming — this was
+  // a real bug. claimedTransferIds still guards against this effect
+  // re-entering the same transfer while a claim for it is already in
+  // flight (a new snapshot can arrive mid-await); a transfer whose claim
+  // attempt throws (offline, etc.) is un-marked so a later snapshot
+  // retries it, but one that resolves false (genuinely already claimed
+  // elsewhere) is never retried or credited.
   useEffect(() => {
     const unclaimed = incomingTransfers.filter((t) => !claimedTransferIds.current.has(t.id));
     if (unclaimed.length === 0) return;
-    let next = character;
-    for (const transfer of unclaimed) {
-      claimedTransferIds.current.add(transfer.id);
-      next = receiveMoney(next, transfer.amount, transfer.fromName);
-      void claimMoneyTransfer(transfer.id).catch(() => {});
-    }
-    onUpdateCharacter(next);
+    let cancelled = false;
+    void (async () => {
+      let next = character;
+      for (const transfer of unclaimed) {
+        if (cancelled) return;
+        claimedTransferIds.current.add(transfer.id);
+        let won: boolean;
+        try {
+          won = await claimMoneyTransfer(transfer.id);
+        } catch {
+          claimedTransferIds.current.delete(transfer.id);
+          continue;
+        }
+        if (!won || cancelled) continue;
+        next = receiveMoney(next, transfer.amount, transfer.fromName);
+        onUpdateCharacter(next);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [incomingTransfers]);
 

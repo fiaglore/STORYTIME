@@ -59,9 +59,14 @@ service cloud.firestore {
         request.resource.data.claimed == false;
       allow update: if request.auth != null &&
         request.auth.uid == resource.data.toUid &&
+        resource.data.claimed == false &&
+        request.resource.data.claimed == true &&
         request.resource.data.amount == resource.data.amount &&
         request.resource.data.fromUid == resource.data.fromUid &&
-        request.resource.data.toUid == resource.data.toUid;
+        request.resource.data.toUid == resource.data.toUid &&
+        request.resource.data.fromName == resource.data.fromName &&
+        request.resource.data.toName == resource.data.toName &&
+        request.resource.data.createdAt == resource.data.createdAt;
       allow delete: if false;
     }
     match /chats/{chatId} {

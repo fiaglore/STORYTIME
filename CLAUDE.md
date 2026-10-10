@@ -402,12 +402,37 @@ note in Lagos Life's intro screen).
   No accept/decline step — `sendMoney` in `lifeSim.ts`
   deducts the sender's own naira and persists it immediately, and
   `sendMoneyTransfer` writes a `moneyTransfers/{id}` doc. The recipient's
-  client watches `watchIncomingTransfers` (their uid, unclaimed only),
-  credits their own naira locally via `receiveMoney`, and calls
-  `claimMoneyTransfer` to mark it claimed — same "neither side writes the
-  other's save document" principle as marriage; `firestore.rules` only
-  lets the recipient flip `claimed` and only lets the sender create a doc
-  with a positive amount and their own uid as `fromUid`.
+  client watches `watchIncomingTransfers` (their uid, unclaimed only) and
+  only calls `receiveMoney` to credit their own naira once
+  `claimMoneyTransfer` reports it actually won the claim — same "neither
+  side writes the other's save document" principle as marriage;
+  `firestore.rules` only lets the recipient flip `claimed` (now only from
+  `false` to `true`, with every other field pinned) and only lets the
+  sender create a doc with a positive amount and their own uid as
+  `fromUid`. `claimMoneyTransfer` is a Firestore `runTransaction` (read
+  the transfer, bail out false if it's missing or already claimed,
+  otherwise flip `claimed` and return true) rather than a plain
+  `updateDoc` — the plain version used to let a transfer be credited
+  twice: it unconditionally "succeeded" regardless of the doc's current
+  state, and `LifeSimSocial.tsx` called `receiveMoney` and fired off that
+  write *before* waiting for it to confirm, so two signed-in tabs/devices
+  racing on the same unclaimed transfer, or a reload landing between the
+  local credit and the write actually confirming, could both credit the
+  same gift — a real duplication bug. Firestore transactions serialize
+  concurrent attempts on the same document, so only one ever wins; the
+  UI now credits naira only when its own `claimMoneyTransfer` call
+  resolves `true`, and un-marks (for retry on a later snapshot) a
+  transfer whose claim attempt merely threw (offline, etc.) rather than
+  genuinely losing the race. There's no Firebase emulator or test harness
+  in this repo for either `firebase.ts` or `firestore.rules`, so this was
+  verified with throwaway Node scripts run directly against the real
+  configured Firebase project (two claim attempts on the same transfer,
+  both sequential and truly concurrent via `Promise.all`, asserting
+  exactly one winner) and a two-browser-context Playwright pass through
+  the real built app (one sender, one recipient, confirming the credit
+  lands exactly once and a reload afterward doesn't re-credit it) —
+  not part of `npm test`, which only covers `lifeSim.ts`'s pure engine
+  functions.
 - **Chat** (same `LifeSimSocial.tsx`): free-text, pairwise, any two
   players who can see each other in the nearby-players list (or a married
   spouse). `chatId` is a deterministic sort of the two uids

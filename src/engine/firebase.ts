@@ -299,10 +299,30 @@ export async function sendMoneyTransfer(
   });
 }
 
-export async function claimMoneyTransfer(transferId: string): Promise<void> {
-  if (!firebaseEnabled) return;
+// Atomically flips claimed to true only if it's currently false, and
+// reports whether THIS call is the one that made that change — a plain
+// updateDoc (what this used to be) always "succeeds" regardless of the
+// doc's current state, so two attempts to claim the same transfer (two
+// signed-in devices/tabs both watching the same unclaimed transfer, or
+// one tab reloading between crediting the naira locally and this write
+// actually confirming) could both flip it and, far more importantly,
+// both credit the naira — a real duplication bug this fixes. A Firestore
+// transaction serializes concurrent attempts against the same document:
+// only one commits with claimed still false, every other attempt (racing
+// or merely later) reads claimed already true and returns false without
+// writing anything. The caller (LifeSimSocial.tsx) only calls
+// receiveMoney when this resolves true, so crediting is now gated on
+// winning the claim instead of racing ahead of it.
+export async function claimMoneyTransfer(transferId: string): Promise<boolean> {
+  if (!firebaseEnabled) return false;
   const { db, firestoreMod } = await loadFirebase();
-  await firestoreMod.updateDoc(firestoreMod.doc(db, "moneyTransfers", transferId), { claimed: true });
+  return firestoreMod.runTransaction(db, async (tx) => {
+    const ref = firestoreMod.doc(db, "moneyTransfers", transferId);
+    const snap = await tx.get(ref);
+    if (!snap.exists() || (snap.data() as MoneyTransferDoc).claimed) return false;
+    tx.update(ref, { claimed: true });
+    return true;
+  });
 }
 
 export function watchIncomingTransfers(

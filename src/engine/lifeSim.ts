@@ -7,7 +7,7 @@ import {
   type LifeEvent,
   type StatDelta,
 } from "../content/lifeEvents";
-import type { Chore } from "../content/chores";
+import type { Chore, ChoreCategory } from "../content/chores";
 import { SKILLS, type Skill } from "../content/skills";
 import type { ShopItem } from "../content/shop";
 import { WEALTH_TIERS, type FaithId, type WealthTierId } from "../content/characterCreation";
@@ -106,6 +106,10 @@ export interface LifeCharacter {
   inheritance: number;
   // Capped per year same as hustlesThisYear — see pray()/MAX_PRAYERS_PER_YEAR.
   prayersThisYear: number;
+  // Per-category chore mastery (0-100), built by passing that category's
+  // mini-challenge in resolveChore — see ChoreCategory in content/chores.ts
+  // and src/ui/ChoreChallenge.tsx for the three challenge types.
+  choreSkills: Record<ChoreCategory, number>;
 }
 
 export interface LifeStage {
@@ -210,6 +214,7 @@ export function createCharacter(opts: CreateCharacterOptions): LifeCharacter {
     wealthTier: opts.wealthTier,
     inheritance: opts.inheritance,
     prayersThisYear: 0,
+    choreSkills: { labor: 0, errands: 0, finance: 0 },
   };
 }
 
@@ -420,18 +425,34 @@ export function treatInjury(character: LifeCharacter): LifeCharacter {
   };
 }
 
-// Applies one small no-choice daily task (see content/chores.ts) — unlike
-// resolveEvent there's no choice index or availability gate, just the one
-// delta and a log line, since a chore is the "you just have to do this"
-// busywork that gates Age Up rather than a dramatic branching moment.
-export function resolveChore(character: LifeCharacter, chore: Chore): LifeCharacter {
+// Applies one daily task (see content/chores.ts) after its mini-challenge
+// (ChoreChallenge.tsx) resolves — unlike resolveEvent there's no choice
+// index or availability gate, just one delta and a log line, since a
+// chore is the "you just have to do this" busywork that gates Age Up
+// rather than a dramatic branching moment. passed (default true, for
+// callers that skip the challenge) decides whether the chore's full
+// delta applies with a chore-category skill gain, or a reduced outcome
+// with no gain — failing still clears the chore so a year can never
+// stall forever on one unlucky mini-game.
+export function resolveChore(character: LifeCharacter, chore: Chore, passed = true): LifeCharacter {
   const prevNaira = character.stats.naira;
-  const stats = applyDelta(character.stats, chore.delta);
+  const delta = passed ? chore.delta : { ...chore.delta, happiness: (chore.delta.happiness ?? 0) - 3 };
+  const stats = applyDelta(character.stats, delta);
+  const prevLevel = character.choreSkills[chore.category];
+  const gain = passed ? randomInt(4, 10) : 0;
+  const nextLevel = clampStat(prevLevel + gain);
+  const leveledUp = passed && Math.floor(prevLevel / 10) < Math.floor(nextLevel / 10);
+  const resultText = passed ? chore.text : `${chore.text} You fumbled it.`;
   return {
     ...character,
     stats,
     ...trackNaira(character, prevNaira, stats.naira),
-    log: [...character.log, `Age ${character.age}: ${chore.text}`],
+    choreSkills: { ...character.choreSkills, [chore.category]: nextLevel },
+    log: [
+      ...character.log,
+      `Age ${character.age}: ${resultText}`,
+      ...(leveledUp ? [`Age ${character.age}: Getting better at ${chore.category} — level ${nextLevel}.`] : []),
+    ],
   };
 }
 

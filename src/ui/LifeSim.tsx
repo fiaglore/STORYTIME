@@ -47,6 +47,7 @@ import { AccountSection } from "./AccountSection";
 import { latestDelta, useStatDeltas } from "./useStatDeltas";
 import { JobInterviewGame, type InterviewResult } from "./JobInterviewGame";
 import { LifeSimSocial } from "./LifeSimSocial";
+import { ChoreChallenge } from "./ChoreChallenge";
 
 // Realistic one-time bonus/penalty on top of the job itself — see
 // lifeEvents.ts's header comment for the real-Naira economy this plugs into.
@@ -173,9 +174,9 @@ export function LifeSim({ onExit }: Props) {
     setPendingChores(pickChores(next, CHORES_PER_YEAR));
   };
 
-  const handleChore = (chore: Chore) => {
+  const handleChoreChallengeComplete = (chore: Chore, passed: boolean) => {
     if (!character) return;
-    setCharacter(resolveChore(character, chore));
+    setCharacter(resolveChore(character, chore, passed));
     setPendingChores((cs) => cs.filter((c) => c.id !== chore.id));
   };
 
@@ -704,9 +705,12 @@ export function LifeSim({ onExit }: Props) {
             Before you can age up — {pendingChores.length} thing{pendingChores.length > 1 ? "s" : ""} left today
           </p>
           <p className="lifesim-chore__text">{pendingChores[0].text}</p>
-          <button className="choice-button choice-button--primary" onClick={() => handleChore(pendingChores[0])}>
-            Done
-          </button>
+          <ChoreChallenge
+            key={pendingChores[0].id}
+            category={pendingChores[0].category}
+            level={character.choreSkills[pendingChores[0].category]}
+            onComplete={(passed) => handleChoreChallengeComplete(pendingChores[0], passed)}
+          />
         </div>
       ) : !meetsAgeUpRequirements(character) ? (
         (() => {

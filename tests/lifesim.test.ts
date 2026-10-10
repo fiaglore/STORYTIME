@@ -57,6 +57,7 @@ function baseCharacter(overrides: Partial<LifeCharacter> = {}): LifeCharacter {
     wealthTier: "middle-class",
     inheritance: 0,
     prayersThisYear: 0,
+    choreSkills: { labor: 0, errands: 0, finance: 0 },
     ...overrides,
   };
 }
@@ -395,7 +396,35 @@ describe("chores", () => {
     const c = baseCharacter({ stats: { happiness: 50, health: 50, smarts: 50, looks: 50, naira: 5000 } });
     const next = resolveChore(c, chore);
     expect(next.stats.naira).toBe(3000); // 5000 - 2000
-    expect(next.log.at(-1)).toContain(chore.text);
+    expect(next.log.some((line) => line.includes(chore.text))).toBe(true);
+  });
+
+  it("resolveChore(passed=true) gains chore-category skill; (passed=false) doesn't", () => {
+    const chore = CHORES.find((c) => c.id === "market-run")!;
+    const c = baseCharacter();
+    const passedNext = resolveChore(c, chore, true);
+    expect(passedNext.choreSkills.finance).toBeGreaterThan(c.choreSkills.finance);
+
+    const failedNext = resolveChore(c, chore, false);
+    expect(failedNext.choreSkills.finance).toBe(c.choreSkills.finance);
+  });
+
+  it("resolveChore still clears/applies the chore on a failed challenge, just worse", () => {
+    const chore = CHORES.find((c) => c.id === "sweep-frontage")!; // delta: { happiness: 1 }
+    const c = baseCharacter({ stats: { happiness: 50, health: 50, smarts: 50, looks: 50, naira: 0 } });
+    const failedNext = resolveChore(c, chore, false);
+    expect(failedNext.stats.happiness).toBeLessThan(c.stats.happiness);
+  });
+
+  it("logs a level-up line once a chore-category skill crosses a 10-point boundary", () => {
+    const chore = CHORES.find((c) => c.id === "market-run")!;
+    let c = baseCharacter();
+    let sawLevelUp = false;
+    for (let i = 0; i < 20 && !sawLevelUp; i++) {
+      c = resolveChore(c, chore, true);
+      if (c.log.some((line) => line.includes("Getting better at finance"))) sawLevelUp = true;
+    }
+    expect(sawLevelUp).toBe(true);
   });
 });
 

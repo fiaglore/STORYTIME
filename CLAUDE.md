@@ -137,12 +137,26 @@ the single surviving mode, `src/ui/LifeSim.tsx`.
   real branching choices and bigger stakes); `pickChores(character,
   CHORES_PER_YEAR)` rolls a fresh set every time a year starts (character
   creation and every `ageUp`), and `LifeSim.tsx` won't show the Age Up
-  button again until `pendingChores` is empty — see `resolveChore` in
-  `lifeSim.ts`. A band with no chores in the pool (infancy) just gets an
-  empty list, so Age Up stays immediate there; add new chores to the pool
-  rather than raising `CHORES_PER_YEAR` if an age band needs more variety,
-  so the friction doesn't come from repeating the same 2-3 chores over and
-  over.
+  button again until `pendingChores` is empty. A band with no chores in
+  the pool (infancy) just gets an empty list, so Age Up stays immediate
+  there; add new chores to the pool rather than raising
+  `CHORES_PER_YEAR` if an age band needs more variety, so the friction
+  doesn't come from repeating the same 2-3 chores over and over.
+- Each chore belongs to one of three `ChoreCategory`s (`labor` / `errands`
+  / `finance`) and, before `resolveChore` applies its delta, the player
+  plays that category's mini-challenge (`src/ui/ChoreChallenge.tsx`):
+  `labor` is a timing game (stop a sweeping marker in a zone, same shape
+  as `JobInterviewGame`), `errands` is a memorize-then-repeat icon
+  sequence, `finance` is a change-counting question against a countdown.
+  Passing grants the chore's full delta plus 4-10 points of that
+  category's skill (`LifeCharacter.choreSkills`, 0-100, logged as a
+  level-up line every 10-point boundary crossed); failing still clears
+  the chore (so one bad round at a mini-game can never stall a year
+  forever) but applies a worse outcome (an extra happiness hit, via
+  `resolveChore`'s `passed` flag) and no skill gain. Each challenge gets
+  harder as its category's level rises (narrower timing zone, longer
+  sequence, shorter countdown) — leveling up is never meant to trivialize
+  the "hard challenge to pass" the design calls for.
 - `pickChores` filters on more than age band — a chore that assumes a
   specific economic reality (`maxNaira`: queuing to charge your phone
   implies no power at home; `minNaira`: having a driver to settle disputes

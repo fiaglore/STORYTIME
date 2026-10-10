@@ -4,6 +4,7 @@ import { TitleScreen } from "./ui/TitleScreen";
 import { MapHub } from "./ui/MapHub";
 import { StorytimeOpening } from "./ui/StorytimeOpening";
 import { RpgMap } from "./ui/RpgMap";
+import { LifeSim } from "./ui/LifeSim";
 import { EndingScreen } from "./ui/EndingScreen";
 import { EndingsGallery } from "./ui/EndingsGallery";
 import { Settings } from "./ui/Settings";
@@ -33,7 +34,8 @@ type Screen =
   | { name: "story"; chapter: Chapter; storyJson: unknown }
   | { name: "ending"; chapter: Chapter; ending: EndingInfo }
   | { name: "gallery" }
-  | { name: "settings" };
+  | { name: "settings" }
+  | { name: "lifesim" };
 
 export default function App() {
   const hydrate = useGameStore((s) => s.hydrate);
@@ -50,6 +52,7 @@ export default function App() {
   }
 
   const goToMap = () => setScreen({ name: "map" });
+  const goToTitle = () => setScreen({ name: "title" });
 
   const selectChapter = (chapter: Chapter) => {
     const storyJson = findCompiledStory(chapter.inkFile);
@@ -73,7 +76,12 @@ export default function App() {
 
   switch (screen.name) {
     case "title":
-      return <TitleScreen onEnter={goToMap} />;
+      return (
+        <TitleScreen
+          onEnterStories={goToMap}
+          onEnterLife={() => setScreen({ name: "lifesim" })}
+        />
+      );
 
     case "map":
       return (
@@ -118,6 +126,9 @@ export default function App() {
 
     case "settings":
       return <Settings onBack={goToMap} />;
+
+    case "lifesim":
+      return <LifeSim onExit={goToTitle} />;
 
     default:
       return null;

@@ -1,12 +1,13 @@
 import { useState } from "react";
 
 interface Props {
-  onEnter: () => void;
+  onEnterStories: () => void;
+  onEnterLife: () => void;
 }
 
 const AGE_GATE_KEY = "storytime-lagos:age-confirmed";
 
-export function TitleScreen({ onEnter }: Props) {
+export function TitleScreen({ onEnterStories, onEnterLife }: Props) {
   const [showGate, setShowGate] = useState(
     () => localStorage.getItem(AGE_GATE_KEY) !== "true",
   );
@@ -14,7 +15,6 @@ export function TitleScreen({ onEnter }: Props) {
   const confirmAge = () => {
     localStorage.setItem(AGE_GATE_KEY, "true");
     setShowGate(false);
-    onEnter();
   };
 
   if (showGate) {
@@ -41,9 +41,14 @@ export function TitleScreen({ onEnter }: Props) {
       <p className="title-screen__tagline">
         Seven people. One city. Every choice costs you money or costs you yourself.
       </p>
-      <button className="choice-button choice-button--primary" onClick={onEnter}>
-        Enter Lagos
-      </button>
+      <div className="title-screen__modes">
+        <button className="choice-button choice-button--primary" onClick={onEnterStories}>
+          Play the stories
+        </button>
+        <button className="choice-button" onClick={onEnterLife}>
+          Live a Lagos life
+        </button>
+      </div>
       <p className="title-screen__companion">A companion to the book</p>
     </div>
   );

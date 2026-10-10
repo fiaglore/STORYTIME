@@ -9,9 +9,17 @@ or costs you yourself (Spirit).
 Full design document: [`docs/design.md`](docs/design.md) (exported from
 the original GDD PDF, also kept at `docs/design.pdf`).
 
+The title screen offers two separate modes: **Play the stories** (the
+book chapters above) and **Live a Lagos life** — a BitLife-style
+procedural life sim where you age up year by year through random
+Lagos-flavored events (school, hustle, family, the city), independent of
+the book's chapters.
+
 **Status:** Chapter 1, "The Grind" (Mama Ngozi), is fully playable with
 all four endings. Chapters 2–7 are designed in `docs/design.md` but not
-yet scripted — see the Build roadmap section there.
+yet scripted — see the Build roadmap section there. Lagos Life mode has a
+real, replayable core loop (aging, random events, jobs, death/new life)
+with ~20 events across childhood/teen/adult years.
 
 ## Running locally
 
@@ -30,13 +38,14 @@ This compiles `chapters/*.ink` to `src/content/compiled/*.json` first
 | `npm run dev` | Compile Ink, then start the dev server |
 | `npm run build` | Compile Ink, type-check, and build the production bundle to `dist/` |
 | `npm run preview` | Serve the built `dist/` locally, at the same `/STORYTIME/` base path GitHub Pages uses |
-| `npm test` | Run the Vitest suite — drives the compiled Ink directly to prove every ending in Chapter 1 is reachable |
+| `npm test` | Run the Vitest suite — drives the compiled Ink directly to prove every ending in Chapter 1 is reachable, plus pure-function tests for the Lagos Life engine |
 | `npm run compile:ink` | Compile `chapters/*.ink` to `src/content/compiled/*.json` on its own |
 | `npm run lint` | Oxlint |
 
-There's also a manual Playwright smoke test (`tests/e2e-smoke.mjs`) that
-plays the golden path in a real browser against a running preview server;
-see the comment at the top of that file for how to run it.
+There are also two manual Playwright smoke tests that play a golden path
+in a real browser against a running preview server — `tests/e2e-smoke.mjs`
+for story mode, `scripts/smoke-lifesim.mjs` for Lagos Life mode; see the
+comment at the top of each file for how to run it.
 
 ## How a chapter is built
 

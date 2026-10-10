@@ -94,6 +94,19 @@
   font-size: 0.9rem;
 }
 
+.title-screen__modes {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  width: 100%;
+  max-width: 18rem;
+}
+
+.title-screen__modes .choice-button {
+  text-align: center;
+  justify-content: center;
+}
+
 .age-gate {
   max-width: 32rem;
   display: flex;
@@ -740,4 +753,150 @@
 
 .rpg-choice-pill:active {
   transform: scale(0.97);
+}
+
+/* ---------- lagos life sim ---------- */
+
+.lifesim-intro {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  margin-top: 1.5rem;
+  max-width: 28rem;
+}
+
+.lifesim-intro__tagline {
+  font-family: var(--font-serif);
+  font-size: 1.1rem;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+.lifesim-intro__label {
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+.lifesim-intro__input {
+  font-family: var(--font-sans);
+  font-size: 1.05rem;
+  padding: 0.75rem 1rem;
+  border-radius: 0.75rem;
+  border: 2px solid var(--border);
+  background: var(--bg-elevated);
+  color: var(--text);
+}
+
+.lifesim-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 0.85rem;
+  padding: 0.9rem 1rem;
+  margin-top: 1rem;
+}
+
+.lifesim-stat__row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.lifesim-naira {
+  font-weight: 800;
+  color: var(--naira);
+  padding-top: 0.3rem;
+  border-top: 1px solid var(--border);
+  margin-top: 0.2rem;
+}
+
+.lifesim-job {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  padding: 0.7rem 0.1rem;
+}
+
+.lifesim-job__button {
+  font-family: var(--font-sans);
+  font-weight: 700;
+  font-size: 0.8rem;
+  border: none;
+  background: var(--accent);
+  color: #fff;
+  padding: 0.4rem 0.8rem;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.lifesim-jobs {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.lifesim-log {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 0.75rem 0;
+  border-top: 1px solid var(--border);
+  margin-top: 0.3rem;
+}
+
+.lifesim-log__line {
+  font-size: 0.88rem;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.lifesim-event {
+  border: 2px solid var(--chapter-accent, var(--accent));
+  border-radius: 1rem;
+  padding: 1.1rem;
+  background: var(--bg-elevated);
+  margin-top: 0.5rem;
+  animation: rpg-bubble-in 0.2s ease-out;
+}
+
+.lifesim-event__prompt {
+  font-family: var(--font-serif);
+  font-size: 1.1rem;
+  line-height: 1.5;
+  margin-bottom: 0.9rem;
+}
+
+.lifesim-age-up {
+  margin-top: 1rem;
+  text-align: center;
+  justify-content: center;
+  font-size: 1.05rem;
+}
+
+.lifesim-obituary {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 0.6rem;
+  margin-top: 2rem;
+}
+
+.lifesim-obituary__span {
+  color: var(--text-muted);
+}
+
+.lifesim-obituary__cause {
+  font-family: var(--font-serif);
+  font-style: italic;
+  max-width: 26rem;
 }

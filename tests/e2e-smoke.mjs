@@ -35,6 +35,9 @@ await page.waitForSelector("text=I'm 16 or older");
 await page.screenshot({ path: "/tmp/01-title.png" });
 await page.click("text=I'm 16 or older");
 
+await page.waitForSelector("text=Play the stories");
+await page.click("text=Play the stories");
+
 await page.waitForSelector("text=The Grind");
 await page.screenshot({ path: "/tmp/02-map.png" });
 

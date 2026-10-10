@@ -3,6 +3,14 @@
 Narrative choice game, companion to the book "What Is It About Lagos".
 Design doc: docs/design.md. Read it before changing game rules.
 
+The app has two independent game modes, chosen from the title screen:
+**Play the stories** (the book's 7 Ink-scripted chapters, see below) and
+**Live a Lagos life** (`src/ui/LifeSim.tsx` — a BitLife-style procedural
+life sim: age up year by year through a pool of random Lagos-flavored
+events, no Ink/chapters involved). They share the app shell, brand
+styling and localStorage-based persistence conventions, but are otherwise
+separate systems — don't assume one when working on the other.
+
 ## Stack
 
 - Vite + React + TypeScript, Zustand for state
@@ -50,6 +58,12 @@ Design doc: docs/design.md. Read it before changing game rules.
   drives the compiled Ink JSON directly (no browser needed) to prove every
   declared ending is reachable; see `tests/the-grind.test.ts` as the
   pattern for new chapters.
+- Lagos Life mode (`src/engine/lifeSim.ts` + `src/content/lifeEvents.ts`)
+  is plain TypeScript, no Ink involved. Add new random events to the
+  `LIFE_EVENTS` array in `lifeEvents.ts` (pick the right `AgeBand`s; the
+  "infant" band intentionally has no events — babies don't make choices).
+  Keep the engine functions in `lifeSim.ts` pure (character in, character
+  out) so they stay testable without a browser; see `tests/lifesim.test.ts`.
 - Run `npm test` and `npm run build` before finishing any task.
 
 ## Repo layout
@@ -57,11 +71,16 @@ Design doc: docs/design.md. Read it before changing game rules.
 ```
 chapters/*.ink              one Ink file per chapter (source of truth)
 scripts/compile-ink.mjs     compiles chapters/*.ink -> src/content/compiled/*.json
-src/engine/                 inkRunner (React hook wrapping inkjs), Zustand store, saves
+scripts/smoke-lifesim.mjs   manual Playwright smoke test for Lagos Life mode
+src/engine/                 inkRunner (React hook wrapping inkjs), lifeSim (pure life-sim
+                             engine), Zustand store, saves
 src/scenes/                 mini-scene React components (frying, change-making, ...)
-src/ui/                     map hub, RpgMap (chapter play screen), endings gallery, settings, etc.
-src/content/                chapter metadata (chapters.json), glossary.json, compiled ink JSON
-tests/                      Vitest engine tests + a manual Playwright e2e smoke script
+src/ui/                     map hub, RpgMap (chapter play screen), LifeSim (life-sim mode),
+                             endings gallery, settings, etc.
+src/content/                chapter metadata (chapters.json), lifeEvents.ts (life-sim event
+                             pool), glossary.json, compiled ink JSON
+tests/                      Vitest engine tests (chapters + life sim) + a manual Playwright
+                             e2e smoke script for story mode
 ```
 
 ## Adding a new chapter

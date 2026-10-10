@@ -3,8 +3,20 @@
 // Themes echo the book's chapters (hustle, extortion, family pressure, the
 // Naira-or-Spirit trade-off) without requiring the Ink engine — this is a
 // separate, procedural game mode living alongside the scripted chapters.
+//
+// naira deltas are real Naira (not an abstract "k" unit), anchored to a
+// fuel price of NGN1,400/litre — see the generator-bill event's math in
+// particular. Job pay (lifeSim.ts's JOBS) is similarly realistic annual
+// Lagos income, so affording the larger discretionary costs here (a
+// generator, POS capital, full school fees) is meant to be genuinely hard,
+// not a rounding error — that's the point, not a bug.
 
 export type AgeBand = "infant" | "child" | "teen" | "adult";
+
+// Durable goods a character can own, persisted on LifeCharacter.assets.
+// Granted by resolving a choice with grantsAsset, checked by choices with
+// requiresAsset (e.g. you can't choose to run a generator you don't own).
+export type AssetId = "generator" | "pos-business";
 
 export interface StatDelta {
   happiness?: number;
@@ -18,6 +30,17 @@ export interface EventChoice {
   label: string;
   result: string;
   delta: StatDelta;
+  // This choice only appears if the character already owns this asset —
+  // for durable goods (you can't run a generator you never bought).
+  requiresAsset?: AssetId;
+  // This choice only appears if character.stats.naira is at least this —
+  // for affording a specific large discretionary cost up front, rather
+  // than letting any choice drive naira below 0 (applyDelta still clamps
+  // naira at 0, so small/forced costs — bribes, fares — stay choosable
+  // even when they'd wipe out what little the character has).
+  requiresNaira?: number;
+  // Resolving this choice adds this asset to the character permanently.
+  grantsAsset?: AssetId;
 }
 
 export interface LifeEvent {
@@ -42,8 +65,8 @@ export const LIFE_EVENTS: LifeEvent[] = [
     choices: [
       {
         label: "Beg to run the generator",
-        result: "Papa grumbles about fuel money but switches it on.",
-        delta: { naira: -2, happiness: 2 },
+        result: "Papa grumbles about fuel money but switches it on for an hour.",
+        delta: { naira: -700, happiness: 2 },
       },
       {
         label: "Just manage with a candle",
@@ -60,7 +83,7 @@ export const LIFE_EVENTS: LifeEvent[] = [
       {
         label: "Keep it quietly",
         result: "Small small, na so money full ground.",
-        delta: { naira: 3, happiness: 1 },
+        delta: { naira: 500, happiness: 1 },
       },
       {
         label: "Ask around if someone dropped it",
@@ -116,12 +139,12 @@ export const LIFE_EVENTS: LifeEvent[] = [
       {
         label: "Take on weekend hawking to raise it",
         result: "Hot afternoons selling sachet water, but you make the deadline.",
-        delta: { naira: -5, health: -2, smarts: 1 },
+        delta: { naira: -18000, health: -2, smarts: 1 },
       },
       {
         label: "Ask family to help",
-        result: "It costs you a favour you'll owe later, but the form is submitted.",
-        delta: { happiness: -1, naira: 2 },
+        result: "They cover most of it. It costs you a favour you'll owe later.",
+        delta: { naira: -3000, happiness: -1 },
       },
     ],
   },
@@ -133,12 +156,12 @@ export const LIFE_EVENTS: LifeEvent[] = [
       {
         label: "Refuse and keep your distance",
         result: "They mock you for a while, then move on to easier targets.",
-        delta: { happiness: -1, naira: -1 },
+        delta: { happiness: -1 },
       },
       {
         label: "Take the money just once",
-        result: "The cash feels good. The debt they expect back does not.",
-        delta: { naira: 6, happiness: -3, health: -1 },
+        result: "₦25,000 in your hand feels good. The debt they expect back does not.",
+        delta: { naira: 25000, happiness: -3, health: -1 },
       },
     ],
   },
@@ -162,17 +185,17 @@ export const LIFE_EVENTS: LifeEvent[] = [
   {
     id: "danfo-dispute",
     bands: ["adult"],
-    prompt: "The conductor insists the fare just went up and won't give your change.",
+    prompt: "The conductor insists the fare just went up and won't give your ₦150 change.",
     choices: [
       {
         label: "Argue for your change",
         result: "The whole bus gets involved. You get it back, eventually.",
-        delta: { naira: 1, happiness: -1 },
+        delta: { naira: 150, happiness: -1 },
       },
       {
         label: "Let it go",
-        result: "Not worth the stress today. You let the ₦50 go.",
-        delta: { naira: -1, happiness: -1 },
+        result: "Not worth the stress today. You let the ₦150 go.",
+        delta: { naira: -150, happiness: -1 },
       },
     ],
   },
@@ -184,7 +207,7 @@ export const LIFE_EVENTS: LifeEvent[] = [
       {
         label: "Pay the \"settlement\"",
         result: "Cheaper than the argument would have cost you.",
-        delta: { naira: -3, happiness: -2 },
+        delta: { naira: -1000, happiness: -2 },
       },
       {
         label: "Refuse and ask for his ID number",
@@ -194,31 +217,53 @@ export const LIFE_EVENTS: LifeEvent[] = [
     ],
   },
   {
-    id: "generator-bill",
+    id: "generator-opportunity",
     bands: ["adult"],
-    prompt: "NEPA has taken light for four days straight. The generator is drinking fuel money.",
+    prompt: "A neighbour needs quick cash and is selling his small \"I better pass my neighbour\" generator for ₦180,000.",
     choices: [
       {
-        label: "Keep running the generator",
-        result: "At least the fridge stays cold.",
-        delta: { naira: -4, happiness: 1 },
+        label: "Buy it",
+        result: "It's yours — no more sitting in the dark every time NEPA fails.",
+        delta: { naira: -180000, happiness: 3 },
+        requiresNaira: 180000,
+        grantsAsset: "generator",
+      },
+      {
+        label: "Can't spare that right now",
+        result: "You watch him sell it to someone else by evening.",
+        delta: { happiness: -1 },
+      },
+    ],
+  },
+  {
+    id: "generator-bill",
+    bands: ["adult"],
+    prompt: "NEPA has taken light for four days straight.",
+    choices: [
+      {
+        label: "Run the generator (≈16L of fuel)",
+        result: "At least the fridge stays cold and the fan keeps running.",
+        delta: { naira: -22400, happiness: 1 },
+        requiresAsset: "generator",
       },
       {
         label: "Manage without it",
-        result: "You sweat through the nights, but you save the naira.",
-        delta: { naira: 2, health: -1, happiness: -1 },
+        result: "You sweat through the nights, and the fridge food spoils — ₦3,000 wasted.",
+        delta: { naira: -3000, health: -2, happiness: -2 },
       },
     ],
   },
   {
     id: "pos-hustle",
     bands: ["adult"],
-    prompt: "A friend offers you a stake in a POS (point-of-sale) agent business on your street.",
+    prompt: "A friend offers you a stake in a POS (point-of-sale) agent business on your street — ₦150,000 for the machine and float.",
     choices: [
       {
-        label: "Invest what you've saved",
+        label: "Invest",
         result: "Risky, but the commissions start trickling in.",
-        delta: { naira: 5, happiness: 2 },
+        delta: { naira: -150000, happiness: 2 },
+        requiresNaira: 150000,
+        grantsAsset: "pos-business",
       },
       {
         label: "Pass — too risky right now",
@@ -230,17 +275,17 @@ export const LIFE_EVENTS: LifeEvent[] = [
   {
     id: "family-request",
     bands: ["adult"],
-    prompt: "A relative calls asking for help with a hospital bill.",
+    prompt: "A relative calls asking for ₦25,000 to help with a hospital bill.",
     choices: [
       {
         label: "Send what you can",
         result: "It's tight this month, but family is family.",
-        delta: { naira: -6, happiness: 2 },
+        delta: { naira: -25000, happiness: 2 },
       },
       {
         label: "Explain you can't right now",
         result: "The silence on the phone says more than words would.",
-        delta: { happiness: -3, naira: 1 },
+        delta: { happiness: -3 },
       },
     ],
   },
@@ -252,7 +297,7 @@ export const LIFE_EVENTS: LifeEvent[] = [
       {
         label: "Start saving toward it",
         result: "The dream feels closer with every naira you set aside.",
-        delta: { naira: -2, happiness: 3, smarts: 1 },
+        delta: { naira: -20000, happiness: 3, smarts: 1 },
       },
       {
         label: "Decide Lagos is still home",
@@ -269,7 +314,7 @@ export const LIFE_EVENTS: LifeEvent[] = [
       {
         label: "Try an okada through the gaps",
         result: "Terrifying, but you make it on time, heart pounding.",
-        delta: { happiness: 1, health: -2 },
+        delta: { naira: -500, happiness: 1, health: -2 },
       },
       {
         label: "Accept you'll be late",
@@ -286,12 +331,12 @@ export const LIFE_EVENTS: LifeEvent[] = [
       {
         label: "Give generously",
         result: "You feel lighter walking out, in more ways than one.",
-        delta: { naira: -3, happiness: 3 },
+        delta: { naira: -5000, happiness: 3 },
       },
       {
         label: "Give what's comfortable",
         result: "Nobody's counting but you, and you're at peace with it.",
-        delta: { happiness: 1 },
+        delta: { naira: -500, happiness: 1 },
       },
     ],
   },
@@ -319,8 +364,8 @@ export const LIFE_EVENTS: LifeEvent[] = [
     choices: [
       {
         label: "Work extra hours to prove it",
-        result: "You're exhausted, but the extra effort gets noticed.",
-        delta: { naira: 3, health: -2, smarts: 1 },
+        result: "You're exhausted, but the extra effort gets noticed — a ₦20,000 bonus.",
+        delta: { naira: 20000, health: -2, smarts: 1 },
       },
       {
         label: "Do your job well, nothing extra",
@@ -332,17 +377,18 @@ export const LIFE_EVENTS: LifeEvent[] = [
   {
     id: "owambe-invite",
     bands: ["adult", "teen"],
-    prompt: "You're invited to a big owambe party this weekend — new aso-ebi required.",
+    prompt: "You're invited to a big owambe party this weekend — new aso-ebi required, ₦25,000 for the fabric and tailoring.",
     choices: [
       {
         label: "Buy the aso-ebi and go all out",
         result: "You dance till your feet hurt. Worth every naira.",
-        delta: { naira: -5, happiness: 4, looks: 1 },
+        delta: { naira: -25000, happiness: 4, looks: 1 },
+        requiresNaira: 25000,
       },
       {
         label: "Attend in something simple",
         result: "A few side-eyes, but you still have a good time.",
-        delta: { happiness: 2, naira: -1 },
+        delta: { naira: -3000, happiness: 2 },
       },
     ],
   },
@@ -353,30 +399,31 @@ export const LIFE_EVENTS: LifeEvent[] = [
     choices: [
       {
         label: "Negotiate hard",
-        result: "He budges a little. It's something.",
-        delta: { happiness: 1, naira: -2 },
+        result: "He budges a little. You still pay ₦40,000 more than last year.",
+        delta: { naira: -40000, happiness: 1 },
       },
       {
         label: "Start quietly looking for a new place",
         result: "House-hunting in Lagos is its own full-time job.",
-        delta: { naira: -1, happiness: -2 },
+        delta: { naira: -15000, happiness: -2 },
       },
     ],
   },
   {
     id: "sibling-school-fees",
     bands: ["adult"],
-    prompt: "Your younger sibling's school fees are due and your parents are short.",
+    prompt: "Your younger sibling's school fees (₦60,000) are due and your parents are short.",
     choices: [
       {
-        label: "Cover it yourself",
+        label: "Cover it all yourself",
         result: "Your account is thinner, but your sibling stays in school.",
-        delta: { naira: -7, happiness: 3 },
+        delta: { naira: -60000, happiness: 3 },
+        requiresNaira: 60000,
       },
       {
-        label: "Contribute what you can, not all",
+        label: "Contribute what you can",
         result: "You split the difference, and so does the family's relief.",
-        delta: { naira: -3, happiness: 1 },
+        delta: { naira: -20000, happiness: 1 },
       },
     ],
   },
@@ -388,7 +435,8 @@ export const LIFE_EVENTS: LifeEvent[] = [
       {
         label: "Pay for proper tests",
         result: "Nothing serious, just exhaustion — but you catch it early.",
-        delta: { naira: -4, health: 4 },
+        delta: { naira: -15000, health: 4 },
+        requiresNaira: 15000,
       },
       {
         label: "Just rest it off",

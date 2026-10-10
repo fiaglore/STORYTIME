@@ -5,6 +5,7 @@ import {
   availableJobs,
   checkDeath,
   createCharacter,
+  isChoiceAvailable,
   resolveEvent,
   takeJob,
   type LifeCharacter,
@@ -23,6 +24,7 @@ function baseCharacter(overrides: Partial<LifeCharacter> = {}): LifeCharacter {
     log: [],
     seenEventIds: [],
     streak: 0,
+    assets: [],
     ...overrides,
   };
 }
@@ -84,7 +86,7 @@ describe("resolveEvent", () => {
     const event = LIFE_EVENTS.find((e) => e.id === "found-money")!;
     const c = baseCharacter();
     const next = resolveEvent(c, event, 0);
-    expect(next.stats.naira).toBe(13); // base 10 + delta 3
+    expect(next.stats.naira).toBe(510); // base 10 + delta 500
     expect(next.log.at(-1)).toContain(event.choices[0].result);
     expect(next.seenEventIds).toContain(event.id);
   });
@@ -103,6 +105,40 @@ describe("resolveEvent", () => {
     const c = baseCharacter({ streak: 3, stats: { happiness: 50, health: 40, smarts: 50, looks: 50, naira: 0 } });
     const next = resolveEvent(c, event, 0);
     expect(next.streak).toBe(3);
+  });
+});
+
+describe("choice gating (requiresAsset / requiresNaira / grantsAsset)", () => {
+  it("hides a requiresAsset choice until the character owns that asset, and resolveEvent refuses it too", () => {
+    const event = LIFE_EVENTS.find((e) => e.id === "generator-bill")!;
+    const runChoice = event.choices.find((c) => c.requiresAsset === "generator")!;
+    const withoutGenerator = baseCharacter({ stats: { ...baseCharacter().stats, naira: 1_000_000 } });
+    expect(isChoiceAvailable(withoutGenerator, runChoice)).toBe(false);
+    // Even if a caller bypasses the UI's filtering, the engine itself must
+    // not apply an unavailable choice's effects.
+    const unchanged = resolveEvent(withoutGenerator, event, event.choices.indexOf(runChoice));
+    expect(unchanged).toBe(withoutGenerator);
+
+    const withGenerator = baseCharacter({ assets: ["generator"] });
+    expect(isChoiceAvailable(withGenerator, runChoice)).toBe(true);
+  });
+
+  it("hides a requiresNaira choice until the character can afford it", () => {
+    const event = LIFE_EVENTS.find((e) => e.id === "generator-opportunity")!;
+    const buyChoice = event.choices.find((c) => c.requiresNaira != null)!;
+    const poor = baseCharacter({ stats: { ...baseCharacter().stats, naira: 1000 } });
+    expect(isChoiceAvailable(poor, buyChoice)).toBe(false);
+    const rich = baseCharacter({ stats: { ...baseCharacter().stats, naira: 500_000 } });
+    expect(isChoiceAvailable(rich, buyChoice)).toBe(true);
+  });
+
+  it("grants the asset once a grantsAsset choice is resolved", () => {
+    const event = LIFE_EVENTS.find((e) => e.id === "generator-opportunity")!;
+    const buyIndex = event.choices.findIndex((c) => c.grantsAsset === "generator");
+    const rich = baseCharacter({ stats: { ...baseCharacter().stats, naira: 500_000 } });
+    const next = resolveEvent(rich, event, buyIndex);
+    expect(next.assets).toContain("generator");
+    expect(next.stats.naira).toBe(rich.stats.naira - 180_000);
   });
 });
 

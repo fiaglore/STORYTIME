@@ -1,4 +1,13 @@
-import { LIFE_EVENTS, bandForAge, type LifeEvent, type StatDelta } from "../content/lifeEvents";
+import {
+  LIFE_EVENTS,
+  bandForAge,
+  type AssetId,
+  type EventChoice,
+  type LifeEvent,
+  type StatDelta,
+} from "../content/lifeEvents";
+
+export type { AssetId };
 
 export interface LifeStats {
   happiness: number;
@@ -17,12 +26,15 @@ export interface Job {
   payPerYear: number;
 }
 
+// Realistic annual Lagos income (real Naira, not an abstract unit) — see
+// lifeEvents.ts's header comment for the fuel-price anchor this and every
+// event cost is calibrated against.
 export const JOBS: Job[] = [
-  { id: "hawker", title: "Street Hawker", minAge: 18, payPerYear: 6 },
-  { id: "danfo-driver", title: "Danfo Driver", minAge: 18, payPerYear: 9 },
-  { id: "trader", title: "Market Trader", minAge: 18, payPerYear: 10 },
-  { id: "civil-servant", title: "Civil Servant", minAge: 18, payPerYear: 12 },
-  { id: "tech", title: "Tech Hustler", minAge: 18, payPerYear: 16 },
+  { id: "hawker", title: "Street Hawker", minAge: 18, payPerYear: 350_000 },
+  { id: "danfo-driver", title: "Danfo Driver", minAge: 18, payPerYear: 600_000 },
+  { id: "trader", title: "Market Trader", minAge: 18, payPerYear: 700_000 },
+  { id: "civil-servant", title: "Civil Servant", minAge: 18, payPerYear: 900_000 },
+  { id: "tech", title: "Tech Hustler", minAge: 18, payPerYear: 2_200_000 },
 ];
 
 export interface LifeCharacter {
@@ -38,6 +50,10 @@ export interface LifeCharacter {
   // Consecutive years (or event resolutions) health has stayed at or above
   // the resilience threshold; resets to 0 the moment it dips below.
   streak: number;
+  // Durable goods owned (a generator, a POS business, ...) — gates choices
+  // tagged requiresAsset in lifeEvents.ts. Granted by resolving a choice
+  // tagged grantsAsset.
+  assets: AssetId[];
 }
 
 export interface LifeStage {
@@ -96,7 +112,18 @@ export function createCharacter(name: string): LifeCharacter {
     log: [`${name.trim() || "Ngozi"} is born in Lagos.`],
     seenEventIds: [],
     streak: 0,
+    assets: [],
   };
+}
+
+// Whether a choice should even be offered: a requiresAsset choice needs
+// that durable good already owned, a requiresNaira choice needs at least
+// that much saved up — the "very difficult challenge to pass" gates (a
+// generator, POS capital, full school fees, ...) described in the design.
+export function isChoiceAvailable(character: LifeCharacter, choice: EventChoice): boolean {
+  if (choice.requiresAsset && !character.assets.includes(choice.requiresAsset)) return false;
+  if (choice.requiresNaira != null && character.stats.naira < choice.requiresNaira) return false;
+  return true;
 }
 
 export function applyDelta(stats: LifeStats, delta: StatDelta): LifeStats {
@@ -164,7 +191,7 @@ export function resolveEvent(
   choiceIndex: number,
 ): LifeCharacter {
   const choice = event.choices[choiceIndex];
-  if (!choice) return character;
+  if (!choice || !isChoiceAvailable(character, choice)) return character;
   const stats = applyDelta(character.stats, choice.delta);
   // Streak is a once-a-year resilience check (see ageUp) — an event's
   // immediate stat hit doesn't tick it on its own, or players who hit an
@@ -172,6 +199,10 @@ export function resolveEvent(
   const next: LifeCharacter = {
     ...character,
     stats,
+    assets:
+      choice.grantsAsset && !character.assets.includes(choice.grantsAsset)
+        ? [...character.assets, choice.grantsAsset]
+        : character.assets,
     seenEventIds: character.seenEventIds.includes(event.id)
       ? character.seenEventIds
       : [...character.seenEventIds, event.id],

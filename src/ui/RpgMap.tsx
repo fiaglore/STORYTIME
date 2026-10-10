@@ -3,6 +3,8 @@ import { useInkStory } from "../engine/inkRunner";
 import { MeterBar } from "./MeterBar";
 import { FryingScene } from "../scenes/FryingScene";
 import { ChangeMakingScene } from "../scenes/ChangeMakingScene";
+import { useAuthStore } from "../engine/authStore";
+import { clearPresence, watchPresence, writePresence, type PresenceDoc } from "../engine/firebase";
 import type { EndingInfo } from "../engine/inkRunner";
 import type { Chapter } from "../content/types";
 
@@ -80,6 +82,16 @@ export function RpgMap({ chapter, storyJson, onEnding, onExit }: Props) {
   const stageRef = useRef<HTMLDivElement>(null);
   const [charId, npcSpot] = (stageTag ?? "ngozi@stall").split("@");
 
+  // Other signed-in players currently on this same chapter's map, as live
+  // Firestore presence — see src/engine/firebase.ts. Off entirely when not
+  // signed in: presence is a cloud-save-account feature, like sync itself.
+  const uid = useAuthStore((s) => s.user?.uid);
+  const [otherPlayers, setOtherPlayers] = useState<PresenceDoc[]>([]);
+  const presenceLabel = useRef<string | null>(null);
+  if (uid && !presenceLabel.current) {
+    presenceLabel.current = `Visitor ${uid.slice(0, 4).toUpperCase()}`;
+  }
+
   // Mama Ngozi is the player — when she's the one "on stage" we pose the
   // player sprite itself (e.g. ngozi-fry) instead of drawing a second,
   // overlapping figurine. A separate NPC figurine only appears for
@@ -104,6 +116,44 @@ export function RpgMap({ chapter, storyJson, onEnding, onExit }: Props) {
     const interval = window.setInterval(() => setWalkFrame((f) => !f), WALK_FRAME_MS);
     return () => window.clearInterval(interval);
   }, [walking]);
+
+  // Subscribe to other players currently on this chapter's map.
+  useEffect(() => {
+    if (!uid) {
+      setOtherPlayers([]);
+      return;
+    }
+    return watchPresence(chapter.id, uid, setOtherPlayers);
+  }, [uid, chapter.id]);
+
+  // Broadcast this player's own position: once on arrival/chapter change,
+  // again whenever they finish walking to a new spot, and on a heartbeat
+  // interval so other clients don't treat a still-standing player as stale
+  // (see PRESENCE_STALE_MS) — then clear the doc on the way out so this
+  // player doesn't linger as a ghost after leaving.
+  useEffect(() => {
+    if (!uid || !presenceLabel.current) return;
+    const broadcast = () => {
+      // Fails open — e.g. firestore.rules hasn't been republished with the
+      // presence/{uid} block yet on this deployment. Nothing else depends
+      // on this succeeding, so there's nothing useful to do with the error.
+      void writePresence(uid, {
+        chapterId: chapter.id,
+        x: playerPos.x,
+        y: playerPos.y,
+        label: presenceLabel.current!,
+      }).catch(() => {});
+    };
+    broadcast();
+    const interval = window.setInterval(broadcast, 8000);
+    return () => window.clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [uid, chapter.id, walking]);
+
+  useEffect(() => {
+    if (!uid) return;
+    return () => void clearPresence(uid).catch(() => {});
+  }, [uid]);
 
   useEffect(() => {
     if (ending && reportedEndingId.current !== ending.id) {
@@ -256,6 +306,13 @@ export function RpgMap({ chapter, storyJson, onEnding, onExit }: Props) {
               </>
             )}
           </button>
+        ))}
+
+        {otherPlayers.map((p) => (
+          <div key={p.uid} className="rpg-ghost" style={{ left: `${p.x}%`, top: `${p.y}%` }}>
+            <span className="rpg-ghost__label">{p.label}</span>
+            <img className="rpg-stage__ghost" src={`${base}sprites/ngozi.png`} alt="" aria-hidden="true" />
+          </div>
         ))}
 
         {!playerIsSpeaker && (

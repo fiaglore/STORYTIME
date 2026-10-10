@@ -103,6 +103,27 @@ separate systems — don't assume one when working on the other.
   "infant" band intentionally has no events — babies don't make choices).
   Keep the engine functions in `lifeSim.ts` pure (character in, character
   out) so they stay testable without a browser; see `tests/lifesim.test.ts`.
+- Lagos Life's `naira` is real Naira, not an abstract "k" unit — every cost
+  in `lifeEvents.ts` and every job's `payPerYear` in `lifeSim.ts`'s `JOBS`
+  is calibrated against a fuel price of NGN1,400/litre (see the math on
+  the `generator-bill` event) and real Lagos income/cost ranges. Keep new
+  content on that same real scale, and always format with
+  `toLocaleString()` (`formatNaira` in `LifeSim.tsx`), never a bare number
+  or a "k" suffix.
+- Two gates make some choices genuinely hard to reach, not just a bigger
+  number: `EventChoice.requiresAsset` (durable goods — you can't choose to
+  run a generator you don't own) and `EventChoice.requiresNaira` (you can't
+  choose to buy something you haven't saved enough for). `isChoiceAvailable`
+  in `lifeSim.ts` is the single source of truth for both; `LifeSim.tsx`
+  filters choices through it before rendering (an unavailable choice isn't
+  shown at all, not shown-and-disabled) and `resolveEvent` refuses an
+  unavailable choice too, so the engine can't be bypassed even if a caller
+  skips the UI's filtering. `grantsAsset` on a choice adds that asset to
+  `LifeCharacter.assets` once resolved — see the `generator-opportunity` /
+  `generator-bill` pair of events for the full pattern (buy it once you can
+  afford it, then and only then can you choose to run it). Follow this
+  pattern for new hard-to-afford content rather than inventing another gate
+  shape.
 - `LifeCharacter.streak` is a once-a-year resilience counter (consecutive
   years health has stayed >= 30), ticked only in `ageUp` — not in
   `resolveEvent`. It used to tick in both, which let it roughly double-count
@@ -155,6 +176,22 @@ isn't set up" note in Settings / Lagos Life's intro screen).
   the `uid`-keyed effect in `LifeSim.tsx`. There's no conflict resolution
   UI — whichever save the pull finds (cloud if present, else local)
   becomes authoritative for that device from then on.
+- Live multiplayer presence (other signed-in players visible walking around
+  the same chapter's `RpgMap`) is a separate `presence/{uid}` Firestore
+  collection from the save data in `users/{uid}` — ephemeral and
+  world-readable by any signed-in user (needed so everyone can see everyone
+  else), never mixed into the private save doc. `firestore.rules` needs
+  its own `presence/{uid}` match block for this to work (already in the
+  repo's copy) — **this has to be pasted into the Firebase console and
+  published same as the `users/{uid}` block was**, or presence silently
+  does nothing (see `watchPresence`'s error callback / the `.catch(() =>
+  {})` on `writePresence`/`clearPresence` in `RpgMap.tsx` — it's designed
+  to fail open, not throw, so a deployment that hasn't republished rules
+  just shows no other players rather than breaking). `PRESENCE_STALE_MS`
+  (20s) filters out a doc from a closed tab that never got the chance to
+  call `clearPresence` on unmount. Only signed-in players broadcast or see
+  presence — it's a cloud-account feature like sync itself, not available
+  to purely-local play.
 
 ## Repo layout
 

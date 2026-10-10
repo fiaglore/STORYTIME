@@ -114,3 +114,83 @@ export async function writeCloudSave(uid: string, patch: Partial<CloudSave>): Pr
     { merge: true },
   );
 }
+
+// Live "other players visible on the map" presence. One doc per signed-in
+// user (doc id = uid) in a separate top-level `presence` collection — never
+// mixed into their `users/{uid}` save document, since this is ephemeral and
+// world-readable (see firestore.rules) while the save doc is private.
+export interface PresenceDoc {
+  uid: string;
+  chapterId: string;
+  x: number;
+  y: number;
+  label: string;
+  updatedAt: number;
+}
+
+// A presence doc older than this is treated as a stale/abandoned session
+// (closed tab, lost network) rather than a currently-online player, since
+// there's no reliable "I'm leaving" signal from a closed browser tab.
+export const PRESENCE_STALE_MS = 20_000;
+
+export async function writePresence(
+  uid: string,
+  data: Omit<PresenceDoc, "uid" | "updatedAt">,
+): Promise<void> {
+  if (!firebaseEnabled) return;
+  const { db, firestoreMod } = await loadFirebase();
+  await firestoreMod.setDoc(firestoreMod.doc(db, "presence", uid), { ...data, updatedAt: Date.now() });
+}
+
+export async function clearPresence(uid: string): Promise<void> {
+  if (!firebaseEnabled) return;
+  const { db, firestoreMod } = await loadFirebase();
+  await firestoreMod.deleteDoc(firestoreMod.doc(db, "presence", uid));
+}
+
+// Streams other players currently in the same chapter (excludes uidToExclude
+// — the local player's own doc). Stale docs (see PRESENCE_STALE_MS) are
+// filtered out client-side rather than relying on every client to clean up
+// after itself, since a closed tab never gets the chance to.
+export function watchPresence(
+  chapterId: string,
+  uidToExclude: string,
+  callback: (players: PresenceDoc[]) => void,
+): () => void {
+  if (!firebaseEnabled) {
+    callback([]);
+    return () => {};
+  }
+  let unsubscribe: (() => void) | null = null;
+  let cancelled = false;
+  void loadFirebase().then(({ db, firestoreMod }) => {
+    if (cancelled) return;
+    const q = firestoreMod.query(
+      firestoreMod.collection(db, "presence"),
+      firestoreMod.where("chapterId", "==", chapterId),
+    );
+    unsubscribe = firestoreMod.onSnapshot(
+      q,
+      (snap) => {
+        const now = Date.now();
+        const players: PresenceDoc[] = [];
+        snap.forEach((docSnap) => {
+          const data = docSnap.data() as Omit<PresenceDoc, "uid">;
+          if (docSnap.id === uidToExclude) return;
+          if (now - data.updatedAt > PRESENCE_STALE_MS) return;
+          players.push({ uid: docSnap.id, ...data });
+        });
+        callback(players);
+      },
+      // Fails open rather than throwing — e.g. firestore.rules hasn't been
+      // republished with the presence/{uid} block yet on this deployment.
+      // Other players just don't show up; nothing else in the app depends
+      // on presence working.
+      () => callback([]),
+    );
+  });
+  return () => {
+    cancelled = true;
+    unsubscribe?.();
+  };
+}

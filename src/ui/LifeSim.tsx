@@ -4,6 +4,7 @@ import {
   applyDelta,
   availableJobs,
   createCharacter,
+  isChoiceAvailable,
   lifeStageForAge,
   pickEvent,
   resolveEvent,
@@ -19,11 +20,18 @@ import { AccountSection } from "./AccountSection";
 import { latestDelta, useStatDeltas } from "./useStatDeltas";
 import { JobInterviewGame, type InterviewResult } from "./JobInterviewGame";
 
+// Realistic one-time bonus/penalty on top of the job itself — see
+// lifeEvents.ts's header comment for the real-Naira economy this plugs into.
 const INTERVIEW_BONUS: Record<InterviewResult, { naira?: number; happiness?: number }> = {
-  great: { naira: 4, happiness: 3 },
-  good: { naira: 1, happiness: 1 },
+  great: { naira: 15_000, happiness: 3 },
+  good: { naira: 5_000, happiness: 1 },
   miss: { happiness: -2 },
 };
+
+function formatNaira(amount: number): string {
+  const sign = amount > 0 ? "+" : amount < 0 ? "-" : "";
+  return `${sign}₦${Math.abs(amount).toLocaleString()}`;
+}
 
 interface Props {
   onExit: () => void;
@@ -256,7 +264,7 @@ export function LifeSim({ onExit }: Props) {
         })}
         <div className="lifesim-naira">
           <span className="lifesim-naira__value">
-            ₦{character.stats.naira.toLocaleString()}k naira
+            ₦{character.stats.naira.toLocaleString()}
             {latestDelta(statEvents, "naira") != null && (
               <span
                 key={`naira-${latestDelta(statEvents, "naira")}-${character.stats.naira}`}
@@ -264,8 +272,7 @@ export function LifeSim({ onExit }: Props) {
                   latestDelta(statEvents, "naira")! > 0 ? "meter__popup--up" : "meter__popup--down"
                 }`}
               >
-                {latestDelta(statEvents, "naira")! > 0 ? "+" : ""}
-                {latestDelta(statEvents, "naira")}k
+                {formatNaira(latestDelta(statEvents, "naira")!)}
               </span>
             )}
           </span>
@@ -289,7 +296,7 @@ export function LifeSim({ onExit }: Props) {
               className="rpg-choice-pill"
               onClick={() => handleJobPick(j.id)}
             >
-              {j.title} — ~₦{j.payPerYear}k/yr
+              {j.title} — ~₦{j.payPerYear.toLocaleString()}/yr
             </button>
           ))}
         </div>
@@ -314,15 +321,25 @@ export function LifeSim({ onExit }: Props) {
         <div className="lifesim-event">
           <p className="lifesim-event__prompt">{activeEvent.prompt}</p>
           <div className="story-screen__choices">
-            {activeEvent.choices.map((choice, i) => (
-              <button
-                key={choice.label}
-                className="choice-button"
-                onClick={() => handleChoice(i)}
-              >
-                {choice.label}
-              </button>
-            ))}
+            {activeEvent.choices.map((choice, i) => {
+              // Choices gated behind an asset you don't own yet or naira
+              // you haven't saved up just aren't offered — see
+              // isChoiceAvailable / lifeEvents.ts's requiresAsset and
+              // requiresNaira for the "very difficult challenge" gates.
+              if (!isChoiceAvailable(character, choice)) return null;
+              return (
+                <button
+                  key={choice.label}
+                  className="choice-button"
+                  onClick={() => handleChoice(i)}
+                >
+                  {choice.label}
+                  {choice.delta.naira ? (
+                    <span className="choice-button__cost">{formatNaira(choice.delta.naira)}</span>
+                  ) : null}
+                </button>
+              );
+            })}
           </div>
         </div>
       ) : (

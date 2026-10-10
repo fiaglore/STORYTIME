@@ -1,15 +1,16 @@
 @import url("https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;1,400&family=Manrope:wght@500;700;800&display=swap");
 
 :root {
-  --bg: #fbf6ee;
-  --bg-elevated: #ffffff;
-  --text: #241c15;
-  --text-muted: #6b5f52;
-  --border: #e3d9c8;
-  --accent: #d9731c;
-  --naira: #e0a524;
-  --spirit: #6b4423;
-  --danger: #a4342a;
+  --bg: #ffffff;
+  --bg-elevated: #f6f1fb;
+  --text: #1f1330;
+  --text-muted: #6b5f80;
+  --border: #e2d6f0;
+  --accent: #7c3aed;
+  --accent-strong: #5b21b6;
+  --naira: #caa03d;
+  --spirit: #7c3aed;
+  --danger: #c23b4d;
   --font-serif: "Lora", Georgia, serif;
   --font-sans: "Manrope", system-ui, sans-serif;
   color-scheme: light dark;
@@ -17,28 +18,34 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #15120e;
-    --bg-elevated: #1f1b15;
-    --text: #f1e9db;
-    --text-muted: #b6a994;
-    --border: #3a3228;
+    --bg: #0c0612;
+    --bg-elevated: #180f24;
+    --text: #f3ecfb;
+    --text-muted: #b6a9c9;
+    --border: #2e2140;
+    --accent: #a78bfa;
+    --accent-strong: #c4b5fd;
   }
 }
 
 :root[data-theme="light"] {
-  --bg: #fbf6ee;
-  --bg-elevated: #ffffff;
-  --text: #241c15;
-  --text-muted: #6b5f52;
-  --border: #e3d9c8;
+  --bg: #ffffff;
+  --bg-elevated: #f6f1fb;
+  --text: #1f1330;
+  --text-muted: #6b5f80;
+  --border: #e2d6f0;
+  --accent: #7c3aed;
+  --accent-strong: #5b21b6;
 }
 
 :root[data-theme="dark"] {
-  --bg: #15120e;
-  --bg-elevated: #1f1b15;
-  --text: #f1e9db;
-  --text-muted: #b6a994;
-  --border: #3a3228;
+  --bg: #0c0612;
+  --bg-elevated: #180f24;
+  --text: #f3ecfb;
+  --text-muted: #b6a9c9;
+  --border: #2e2140;
+  --accent: #a78bfa;
+  --accent-strong: #c4b5fd;
 }
 
 * {

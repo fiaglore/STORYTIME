@@ -110,15 +110,26 @@ the single surviving mode, `src/ui/LifeSim.tsx`.
   target zone) shown before a Lagos Life job is confirmed; the job is
   granted regardless of the result, which only changes a one-time naira/
   happiness bonus — see `INTERVIEW_BONUS` in `LifeSim.tsx`.
-- Shop (`src/content/shop.ts`) is generated, not hand-written: 25
-  `PRODUCT_LINES` x 6 `TIERS` (dirt-cheap through "Super Duper Luxurious")
-  x 4 `VARIANTS` = exactly 600 `SHOP_ITEMS`, each tier scaling a product
-  line's base price/stat delta by `priceMult`/`statMult`. Add a new
-  product to `PRODUCT_LINES` (not 600 one-off items) to extend the
-  catalog — it multiplies out automatically. `LifeSim.tsx`'s Shop tab
-  filters by category (`SHOP_CATEGORIES`) and a name search, capped at
-  `SHOP_DISPLAY_LIMIT` (40) visible items at once, since rendering all 600
-  flat would be unscannable.
+- Shop (`src/content/shop.ts`) is generated, not hand-written, but every
+  one of the 600 `SHOP_ITEMS` is a genuinely distinct product — not the
+  same item re-labeled "(Dirt Cheap)"/"(Standard)"/etc. 15 `PRODUCT_LINES`
+  per category (120 total, 8 categories) x 5 real brand/quality names per
+  category in `BRAND_TIERS` (e.g. clothing's cheapest-to-priciest brands
+  are Yaba Market → Local Tailor → Zara → Gucci → Custom Couture;
+  electronics' are No-Name → Itel → Samsung → Apple → Vertu) = exactly
+  600. A brand's `priceMult`/`statMult` scales that product line's base
+  price/stat delta, so the price still spans dirt-cheap to "super duper
+  luxurious" — the brand name just carries the tier instead of a literal
+  label, so e.g. "No-Name Smartphone" and "Apple Smartphone" read as two
+  different products, not two versions of one. Add a new product to
+  `PRODUCT_LINES` (not 600 one-off items) to extend the catalog, or a new
+  brand tier to `BRAND_TIERS` for a whole category — both multiply out
+  automatically. There's a test
+  (`SHOP_ITEMS.map(i => i.name)` has no duplicates) guarding this —
+  don't reintroduce generic tier labels in item names. `LifeSim.tsx`'s
+  Shop tab filters by category (`SHOP_CATEGORIES`) and a name search,
+  capped at `SHOP_DISPLAY_LIMIT` (40) visible items at once, since
+  rendering all 600 flat would be unscannable.
 - Skills (`src/content/skills.ts`) is Lagos Life's other way to spend
   naira besides the shop. `buyItem`/`trainSkill` in
   `lifeSim.ts` are both "refuse rather than throw" (unaffordable or

@@ -574,12 +574,16 @@ describe("pickChoreGameVariant / recordChoreGamePlayed", () => {
 });
 
 describe("shop", () => {
-  it("has exactly 600 items (25 product lines x 6 tiers x 4 variants)", () => {
+  it("has exactly 600 items (120 product lines x 5 brand tiers)", () => {
     expect(SHOP_ITEMS.length).toBe(600);
   });
 
   it("every item has a unique id", () => {
     expect(new Set(SHOP_ITEMS.map((i) => i.id)).size).toBe(SHOP_ITEMS.length);
+  });
+
+  it("every item has a unique name — no two items are the same product re-labeled", () => {
+    expect(new Set(SHOP_ITEMS.map((i) => i.name)).size).toBe(SHOP_ITEMS.length);
   });
 
   it("every category defined on an item is one of SHOP_CATEGORIES", () => {
@@ -589,7 +593,7 @@ describe("shop", () => {
   });
 
   it("buys an item, deducts the price, applies its stat boost, and tracks the spend", () => {
-    const item = SHOP_ITEMS.find((i) => i.id === "suya-night-standard-0")!;
+    const item = SHOP_ITEMS.find((i) => i.id === "suya-night-2")!;
     const c = baseCharacter({ stats: { happiness: 50, health: 50, smarts: 50, looks: 50, naira: 1_000_000 } });
     const next = buyItem(c, item);
     expect(next.stats.naira).toBe(1_000_000 - item.price);

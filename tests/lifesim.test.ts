@@ -37,7 +37,7 @@ import { SCHOOLS } from "../src/content/schools";
 import { WEALTH_TIERS } from "../src/content/characterCreation";
 import { LIFE_EVENTS, bandForAge } from "../src/content/lifeEvents";
 import { CHORES, pickChores } from "../src/content/chores";
-import { SHOP_ITEMS } from "../src/content/shop";
+import { SHOP_CATEGORIES, SHOP_ITEMS } from "../src/content/shop";
 import { SKILLS, SKILL_TRAIN_COST } from "../src/content/skills";
 
 function baseCharacter(overrides: Partial<LifeCharacter> = {}): LifeCharacter {
@@ -545,25 +545,39 @@ describe("rollWealthTier", () => {
 });
 
 describe("shop", () => {
+  it("has exactly 600 items (25 product lines x 6 tiers x 4 variants)", () => {
+    expect(SHOP_ITEMS.length).toBe(600);
+  });
+
+  it("every item has a unique id", () => {
+    expect(new Set(SHOP_ITEMS.map((i) => i.id)).size).toBe(SHOP_ITEMS.length);
+  });
+
+  it("every category defined on an item is one of SHOP_CATEGORIES", () => {
+    for (const item of SHOP_ITEMS) {
+      expect(SHOP_CATEGORIES).toContain(item.category);
+    }
+  });
+
   it("buys an item, deducts the price, applies its stat boost, and tracks the spend", () => {
-    const item = SHOP_ITEMS.find((i) => i.id === "suya-night")!; // price 2000, happiness +3
-    const c = baseCharacter({ stats: { happiness: 50, health: 50, smarts: 50, looks: 50, naira: 5000 } });
+    const item = SHOP_ITEMS.find((i) => i.id === "suya-night-standard-0")!;
+    const c = baseCharacter({ stats: { happiness: 50, health: 50, smarts: 50, looks: 50, naira: 1_000_000 } });
     const next = buyItem(c, item);
-    expect(next.stats.naira).toBe(3000);
-    expect(next.stats.happiness).toBe(53);
+    expect(next.stats.naira).toBe(1_000_000 - item.price);
+    expect(next.stats.happiness).toBe(50 + (item.delta.happiness ?? 0));
     expect(next.inventory).toContain(item.id);
-    expect(next.spentThisYear).toBe(2000);
+    expect(next.spentThisYear).toBe(item.price);
   });
 
   it("refuses to buy an item the character can't afford", () => {
-    const item = SHOP_ITEMS.find((i) => i.id === "laptop")!; // price 250,000
+    const priciest = [...SHOP_ITEMS].sort((a, b) => b.price - a.price)[0];
     const c = baseCharacter({ stats: { happiness: 50, health: 50, smarts: 50, looks: 50, naira: 1000 } });
-    const next = buyItem(c, item);
+    const next = buyItem(c, priciest);
     expect(next).toBe(c);
   });
 
   it("refuses to buy the same item twice", () => {
-    const item = SHOP_ITEMS.find((i) => i.id === "second-hand-fan")!;
+    const item = SHOP_ITEMS[0];
     const c = baseCharacter({ inventory: [item.id], stats: { happiness: 50, health: 50, smarts: 50, looks: 50, naira: 1_000_000 } });
     const next = buyItem(c, item);
     expect(next).toBe(c);

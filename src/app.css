@@ -1165,6 +1165,16 @@
   margin-bottom: 0.75rem;
 }
 
+.lifesim-shop__filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.lifesim-shop__search {
+  width: 100%;
+}
+
 .lifesim-shop__item {
   display: flex;
   align-items: center;

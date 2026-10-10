@@ -35,7 +35,7 @@ import {
 } from "../engine/lifeSim";
 import type { LifeEvent } from "../content/lifeEvents";
 import { pickChores, type Chore } from "../content/chores";
-import { SHOP_ITEMS, type ShopItem } from "../content/shop";
+import { SHOP_CATEGORIES, SHOP_ITEMS, type ShopCategory, type ShopItem } from "../content/shop";
 import { SKILLS, SKILL_TRAIN_COST, type Skill } from "../content/skills";
 import { schoolsAvailableTo, type School } from "../content/schools";
 import {
@@ -75,6 +75,11 @@ const CHORES_PER_YEAR = 4;
 // same queue shape as pendingChores. pickEvent's own repeat-once-exhausted
 // fallback means a short age-band pool can still fill this every year.
 const EVENTS_PER_YEAR = 5;
+
+// With 600 shop items, rendering every match is wasteful and the list
+// becomes unscannable — cap what's shown at once and tell the player to
+// narrow their search/category when there's more.
+const SHOP_DISPLAY_LIMIT = 40;
 
 function formatNaira(amount: number): string {
   const sign = amount > 0 ? "+" : amount < 0 ? "-" : "";
@@ -129,6 +134,8 @@ export function LifeSim({ onExit }: Props) {
   const [pendingEvents, setPendingEvents] = useState<LifeEvent[]>([]);
   const [showJobs, setShowJobs] = useState(false);
   const [showShop, setShowShop] = useState(false);
+  const [shopCategory, setShopCategory] = useState<ShopCategory | null>(null);
+  const [shopSearch, setShopSearch] = useState("");
   const [showSkills, setShowSkills] = useState(false);
   const [showMarriage, setShowMarriage] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
@@ -451,6 +458,12 @@ export function LifeSim({ onExit }: Props) {
 
   const job = availableJobs(character).find((j) => j.id === character.job);
 
+  const shopItemsToShow = SHOP_ITEMS.filter(
+    (item) =>
+      (!shopCategory || item.category === shopCategory) &&
+      (!shopSearch.trim() || item.name.toLowerCase().includes(shopSearch.trim().toLowerCase())),
+  ).slice(0, SHOP_DISPLAY_LIMIT);
+
   return (
     <div className="story-screen">
       <header className="story-screen__header">
@@ -648,25 +661,49 @@ export function LifeSim({ onExit }: Props) {
 
       {showShop && (
         <div className="lifesim-shop">
-          {SHOP_ITEMS.map((item) => {
-            const owned = character.inventory.includes(item.id);
-            const afford = character.stats.naira >= item.price;
-            return (
-              <div key={item.id} className="lifesim-shop__item">
-                <div className="lifesim-shop__info">
-                  <span className="lifesim-shop__name">{item.name}</span>
-                  <span className="lifesim-shop__desc">{item.description}</span>
+          <div className="lifesim-shop__filters">
+            {SHOP_CATEGORIES.map((cat) => (
+              <button
+                key={cat}
+                className={`lifesim-tab ${shopCategory === cat ? "lifesim-tab--active" : ""}`}
+                onClick={() => setShopCategory(shopCategory === cat ? null : cat)}
+              >
+                {cat.replace("-", " ")}
+              </button>
+            ))}
+          </div>
+          <input
+            className="lifesim-intro__input lifesim-shop__search"
+            value={shopSearch}
+            onChange={(e) => setShopSearch(e.target.value)}
+            placeholder="Search items…"
+          />
+          {shopItemsToShow.length === 0 ? (
+            <p className="lifesim-hint">No items match — try a different search or category.</p>
+          ) : (
+            shopItemsToShow.map((item) => {
+              const owned = character.inventory.includes(item.id);
+              const afford = character.stats.naira >= item.price;
+              return (
+                <div key={item.id} className="lifesim-shop__item">
+                  <div className="lifesim-shop__info">
+                    <span className="lifesim-shop__name">{item.name}</span>
+                    <span className="lifesim-shop__desc">{item.description}</span>
+                  </div>
+                  <button
+                    className="rpg-choice-pill lifesim-shop__buy"
+                    onClick={() => handleBuy(item)}
+                    disabled={owned || !afford}
+                  >
+                    {owned ? "Owned" : `₦${item.price.toLocaleString()}`}
+                  </button>
                 </div>
-                <button
-                  className="rpg-choice-pill lifesim-shop__buy"
-                  onClick={() => handleBuy(item)}
-                  disabled={owned || !afford}
-                >
-                  {owned ? "Owned" : `₦${item.price.toLocaleString()}`}
-                </button>
-              </div>
-            );
-          })}
+              );
+            })
+          )}
+          {shopItemsToShow.length >= SHOP_DISPLAY_LIMIT && (
+            <p className="lifesim-hint">Showing the first {SHOP_DISPLAY_LIMIT} matches — narrow your search to see more.</p>
+          )}
         </div>
       )}
 

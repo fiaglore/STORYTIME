@@ -104,8 +104,17 @@ the single surviving mode, `src/ui/LifeSim.tsx`.
   target zone) shown before a Lagos Life job is confirmed; the job is
   granted regardless of the result, which only changes a one-time naira/
   happiness bonus — see `INTERVIEW_BONUS` in `LifeSim.tsx`.
-- Shop (`src/content/shop.ts`) and skills (`src/content/skills.ts`) are
-  Lagos Life's other two ways to spend naira. `buyItem`/`trainSkill` in
+- Shop (`src/content/shop.ts`) is generated, not hand-written: 25
+  `PRODUCT_LINES` x 6 `TIERS` (dirt-cheap through "Super Duper Luxurious")
+  x 4 `VARIANTS` = exactly 600 `SHOP_ITEMS`, each tier scaling a product
+  line's base price/stat delta by `priceMult`/`statMult`. Add a new
+  product to `PRODUCT_LINES` (not 600 one-off items) to extend the
+  catalog — it multiplies out automatically. `LifeSim.tsx`'s Shop tab
+  filters by category (`SHOP_CATEGORIES`) and a name search, capped at
+  `SHOP_DISPLAY_LIMIT` (40) visible items at once, since rendering all 600
+  flat would be unscannable.
+- Skills (`src/content/skills.ts`) is Lagos Life's other way to spend
+  naira besides the shop. `buyItem`/`trainSkill` in
   `lifeSim.ts` are both "refuse rather than throw" (unaffordable or
   already-owned is a no-op, same pattern as `resolveEvent`'s gated
   choices). Skills aren't just flavor numbers — `Job.requiresSkill` gates

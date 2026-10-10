@@ -230,7 +230,13 @@ note in Lagos Life's intro screen).
   the repo's copy, needs publishing same as every other collection here).
 - **Send money** (same `LifeSimSocial.tsx`, a "Send money" button next to
   a nearby player or the spouse): "send money to each other to help" per
-  the design ask. No accept/decline step — `sendMoney` in `lifeSim.ts`
+  the design ask, capped at `SEND_CAP_FRACTION` (20%) of current naira per
+  rolling `SEND_WINDOW_YEARS` (5) — `maxSendable` sums
+  `LifeCharacter.sentTransfers` newer than 5 years old and subtracts from
+  the cap; `sendMoney` refuses anything over that remainder the same
+  "refuse rather than throw" way it refuses an unaffordable amount. The
+  UI clamps the input to `maxSendable` rather than the raw naira balance.
+  No accept/decline step — `sendMoney` in `lifeSim.ts`
   deducts the sender's own naira and persists it immediately, and
   `sendMoneyTransfer` writes a `moneyTransfers/{id}` doc. The recipient's
   client watches `watchIncomingTransfers` (their uid, unclaimed only),

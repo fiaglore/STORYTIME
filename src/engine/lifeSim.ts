@@ -110,6 +110,12 @@ export interface LifeCharacter {
   // mini-challenge in resolveChore — see ChoreCategory in content/chores.ts
   // and src/ui/ChoreChallenge.tsx for the three challenge types.
   choreSkills: Record<ChoreCategory, number>;
+  // Every send-money gift this character has made, kept only long enough
+  // to evaluate the rolling send cap — see SEND_WINDOW_YEARS/
+  // SEND_CAP_FRACTION/maxSendable below. Pruned to the window on every
+  // sendMoney call rather than on ageUp, so it stays correct even across
+  // several transfers within the same year.
+  sentTransfers: { age: number; amount: number }[];
 }
 
 export interface LifeStage {
@@ -215,6 +221,7 @@ export function createCharacter(opts: CreateCharacterOptions): LifeCharacter {
     inheritance: opts.inheritance,
     prayersThisYear: 0,
     choreSkills: { labor: 0, errands: 0, finance: 0 },
+    sentTransfers: [],
   };
 }
 
@@ -583,19 +590,46 @@ export function pray(character: LifeCharacter): PrayerResult {
   return { character: next, answered, flavorText };
 }
 
+// "Nobody can send more than 20% of their net worth every 5 years" — a
+// rolling window, not a once-ever cap: a transfer older than
+// SEND_WINDOW_YEARS stops counting against the limit. Net worth here is
+// just current naira (the only valued asset the engine tracks a number
+// for); a character's durable goods in `assets` aren't priced, so they
+// don't factor in.
+export const SEND_WINDOW_YEARS = 5;
+export const SEND_CAP_FRACTION = 0.2;
+
+function sentInWindow(character: LifeCharacter): number {
+  return character.sentTransfers
+    .filter((t) => character.age - t.age < SEND_WINDOW_YEARS)
+    .reduce((sum, t) => sum + t.amount, 0);
+}
+
+// How much more this character could send right now without breaching
+// the rolling cap — what the UI should clamp its amount input to.
+export function maxSendable(character: LifeCharacter): number {
+  const cap = Math.floor(character.stats.naira * SEND_CAP_FRACTION);
+  return Math.max(0, cap - sentInWindow(character));
+}
+
 // Player-to-player money gifts — "send money to help" per the design ask.
 // Pure/local, same shape as marry(): the Firestore write/read happens in
 // LifeSimSocial.tsx via firebase.ts's sendMoneyTransfer/
 // watchIncomingTransfers, these just update the local character. Refuses
-// (rather than throws) a non-positive or unaffordable amount.
+// (rather than throws) a non-positive amount, an unaffordable one, or one
+// that would breach the rolling send cap above.
 export function sendMoney(character: LifeCharacter, amount: number): LifeCharacter {
-  if (amount <= 0 || character.stats.naira < amount) return character;
+  if (amount <= 0 || character.stats.naira < amount || amount > maxSendable(character)) return character;
   const prevNaira = character.stats.naira;
   const stats = applyDelta(character.stats, { naira: -amount });
   return {
     ...character,
     stats,
     ...trackNaira(character, prevNaira, stats.naira),
+    sentTransfers: [
+      ...character.sentTransfers.filter((t) => character.age - t.age < SEND_WINDOW_YEARS),
+      { age: character.age, amount },
+    ],
     log: [...character.log, `Age ${character.age}: Sent ₦${amount.toLocaleString()} to help someone out.`],
   };
 }

@@ -12,6 +12,7 @@ import {
   isChoiceAvailable,
   marry,
   meetsAgeUpRequirements,
+  maxSendable,
   pray,
   receiveMoney,
   resolveChore,
@@ -61,6 +62,7 @@ function baseCharacter(overrides: Partial<LifeCharacter> = {}): LifeCharacter {
     inheritance: 0,
     prayersThisYear: 0,
     choreSkills: { labor: 0, errands: 0, finance: 0 },
+    sentTransfers: [],
     ...overrides,
   };
 }
@@ -688,9 +690,9 @@ describe("changeFaith", () => {
 describe("sendMoney / receiveMoney", () => {
   it("sendMoney deducts naira and logs it, refusing an unaffordable or non-positive amount", () => {
     const c = baseCharacter({ stats: { happiness: 50, health: 50, smarts: 50, looks: 50, naira: 10_000 } });
-    const sent = sendMoney(c, 4000);
-    expect(sent.stats.naira).toBe(6000);
-    expect(sent.log.at(-1)).toContain("Sent ₦4,000");
+    const sent = sendMoney(c, 1000); // within the 20% cap (2000)
+    expect(sent.stats.naira).toBe(9000);
+    expect(sent.log.at(-1)).toContain("Sent ₦1,000");
 
     expect(sendMoney(c, 20_000)).toBe(c);
     expect(sendMoney(c, 0)).toBe(c);
@@ -702,6 +704,41 @@ describe("sendMoney / receiveMoney", () => {
     const next = receiveMoney(c, 5000, "Tunde");
     expect(next.stats.naira).toBe(6000);
     expect(next.log.at(-1)).toContain("Tunde sent you ₦5,000");
+  });
+
+  it("maxSendable caps at 20% of net worth and refuses a send over that cap", () => {
+    const c = baseCharacter({ stats: { happiness: 50, health: 50, smarts: 50, looks: 50, naira: 100_000 } });
+    expect(maxSendable(c)).toBe(20_000);
+    expect(sendMoney(c, 20_001)).toBe(c);
+    const sent = sendMoney(c, 20_000);
+    expect(sent.stats.naira).toBe(80_000);
+  });
+
+  it("counts multiple sends within the rolling 5-year window against the same cap", () => {
+    let c = baseCharacter({ age: 20, stats: { happiness: 50, health: 50, smarts: 50, looks: 50, naira: 100_000 } });
+    c = sendMoney(c, 15_000); // naira now 85,000, but cap was based on naira before this send
+    expect(c.stats.naira).toBe(85_000);
+    // Only 5,000 of the original 20,000 (20% of 100,000) allowance remains.
+    expect(maxSendable(c)).toBeLessThanOrEqual(5_000);
+    expect(sendMoney(c, 5_001)).toBe(c);
+  });
+
+  it("a send from more than 5 years ago no longer counts against the cap", () => {
+    const c = baseCharacter({
+      age: 30,
+      stats: { happiness: 50, health: 50, smarts: 50, looks: 50, naira: 100_000 },
+      sentTransfers: [{ age: 24, amount: 19_000 }], // 6 years ago at age 30
+    });
+    expect(maxSendable(c)).toBe(20_000);
+  });
+
+  it("a send from within 5 years still counts against the cap", () => {
+    const c = baseCharacter({
+      age: 30,
+      stats: { happiness: 50, health: 50, smarts: 50, looks: 50, naira: 100_000 },
+      sentTransfers: [{ age: 27, amount: 19_000 }], // 3 years ago at age 30
+    });
+    expect(maxSendable(c)).toBe(1_000);
   });
 });
 

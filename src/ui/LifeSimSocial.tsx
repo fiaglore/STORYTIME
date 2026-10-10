@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   blockPlayer,
   marry,
+  maxSendable,
   receiveMoney,
   sendMoney,
   type LifeCharacter,
@@ -149,7 +150,7 @@ export function LifeSimSocial({ character, uid, onUpdateCharacter }: Props) {
   const handleSendMoney = () => {
     if (!sendTarget) return;
     const amount = Math.floor(Number(sendAmount));
-    if (!Number.isFinite(amount) || amount <= 0 || amount > character.stats.naira) return;
+    if (!Number.isFinite(amount) || amount <= 0 || amount > maxSendable(character)) return;
     onUpdateCharacter(sendMoney(character, amount));
     void sendMoneyTransfer(uid, character.name, sendTarget.uid, sendTarget.name, amount).catch(() => {});
     setSendTarget(null);
@@ -197,12 +198,15 @@ export function LifeSimSocial({ character, uid, onUpdateCharacter }: Props) {
           </button>
           <span className="lifesim-chat__name">Send money to {sendTarget.name}</span>
         </div>
-        <p className="lifesim-hint">You have ₦{character.stats.naira.toLocaleString()}.</p>
+        <p className="lifesim-hint">
+          You have ₦{character.stats.naira.toLocaleString()}. You can send up to ₦
+          {maxSendable(character).toLocaleString()} right now — no more than 20% of your net worth every 5 years.
+        </p>
         <input
           className="lifesim-intro__input"
           type="number"
           min={1}
-          max={character.stats.naira}
+          max={maxSendable(character)}
           value={sendAmount}
           onChange={(e) => setSendAmount(e.target.value)}
           placeholder="Amount in naira"
@@ -213,7 +217,7 @@ export function LifeSimSocial({ character, uid, onUpdateCharacter }: Props) {
             !sendAmount ||
             !Number.isFinite(Number(sendAmount)) ||
             Number(sendAmount) <= 0 ||
-            Number(sendAmount) > character.stats.naira
+            Number(sendAmount) > maxSendable(character)
           }
           onClick={handleSendMoney}
         >

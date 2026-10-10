@@ -13,6 +13,7 @@ import {
   meetsAgeUpRequirements,
   resolveChore,
   resolveEvent,
+  rollWealthTier,
   takeJob,
   trainSkill,
   unblockPlayer,
@@ -20,6 +21,7 @@ import {
   MAX_HUSTLES_PER_YEAR,
   type LifeCharacter,
 } from "../src/engine/lifeSim";
+import { WEALTH_TIERS } from "../src/content/characterCreation";
 import { LIFE_EVENTS, bandForAge } from "../src/content/lifeEvents";
 import { CHORES, pickChores } from "../src/content/chores";
 import { SHOP_ITEMS } from "../src/content/shop";
@@ -44,6 +46,10 @@ function baseCharacter(overrides: Partial<LifeCharacter> = {}): LifeCharacter {
     spentThisYear: 0,
     hustlesThisYear: 0,
     blockedUids: [],
+    birthDate: "2000-01-01",
+    faith: "christian",
+    wealthTier: "middle-class",
+    inheritance: 0,
     ...overrides,
   };
 }
@@ -316,22 +322,31 @@ describe("jobs", () => {
   });
 });
 
+const creationOpts = (overrides: Partial<Parameters<typeof createCharacter>[0]> = {}) => ({
+  name: "Ada",
+  birthDate: "2000-01-01",
+  faith: "christian" as const,
+  wealthTier: "middle-class" as const,
+  inheritance: 500_000,
+  ...overrides,
+});
+
 describe("createCharacter", () => {
-  it("starts alive, at age 0, with naira at 0", () => {
-    const c = createCharacter("Ada");
+  it("starts alive, at age 0, with naira set to the inheritance", () => {
+    const c = createCharacter(creationOpts());
     expect(c.alive).toBe(true);
     expect(c.age).toBe(0);
-    expect(c.stats.naira).toBe(0);
+    expect(c.stats.naira).toBe(500_000);
     expect(c.name).toBe("Ada");
   });
 
   it("falls back to a default name when blank", () => {
-    const c = createCharacter("   ");
+    const c = createCharacter(creationOpts({ name: "   " }));
     expect(c.name.length).toBeGreaterThan(0);
   });
 
   it("starts with every skill present at a low random level, inventory and assets empty", () => {
-    const c = createCharacter("Ada");
+    const c = createCharacter(creationOpts());
     for (const skill of SKILLS) {
       expect(c.skills[skill.id]).toBeGreaterThanOrEqual(0);
       expect(c.skills[skill.id]).toBeLessThanOrEqual(10);
@@ -340,6 +355,44 @@ describe("createCharacter", () => {
     expect(c.assets).toEqual([]);
     expect(c.earnedThisYear).toBe(0);
     expect(c.spentThisYear).toBe(0);
+  });
+
+  it("carries the chosen faith, birth date and wealth tier through", () => {
+    const c = createCharacter(creationOpts({ faith: "muslim", wealthTier: "rich", inheritance: 3_000_000 }));
+    expect(c.faith).toBe("muslim");
+    expect(c.wealthTier).toBe("rich");
+    expect(c.stats.naira).toBe(3_000_000);
+    expect(c.birthDate).toBe("2000-01-01");
+  });
+});
+
+describe("rollWealthTier", () => {
+  it("always returns a known tier with an inheritance inside that tier's range", () => {
+    for (let i = 0; i < 100; i++) {
+      const scores = [Math.random() * 6, Math.random() * 6, Math.random() * 6];
+      const { tier, inheritance } = rollWealthTier(scores);
+      const def = WEALTH_TIERS.find((t) => t.id === tier);
+      expect(def).toBeDefined();
+      expect(inheritance).toBeGreaterThanOrEqual(def!.inheritanceMin);
+      expect(inheritance).toBeLessThanOrEqual(def!.inheritanceMax);
+    }
+  });
+
+  it("low answer scores never roll the top tier", () => {
+    for (let i = 0; i < 50; i++) {
+      const { tier } = rollWealthTier([0, 0, 0]);
+      expect(tier).not.toBe("famous");
+      expect(tier).not.toBe("stupendously-rich");
+    }
+  });
+
+  it("maximum answer scores can reach the top tier", () => {
+    let sawFamous = false;
+    for (let i = 0; i < 200; i++) {
+      const { tier } = rollWealthTier([6, 6, 6]);
+      if (tier === "famous") sawFamous = true;
+    }
+    expect(sawFamous).toBe(true);
   });
 });
 

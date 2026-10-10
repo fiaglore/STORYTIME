@@ -10,9 +10,11 @@ import {
 import type { Chore } from "../content/chores";
 import { SKILLS, type Skill } from "../content/skills";
 import type { ShopItem } from "../content/shop";
+import { WEALTH_TIERS, type FaithId, type WealthTierId } from "../content/characterCreation";
 
 export type { AssetId };
 export { bandForAge };
+export type { FaithId, WealthTierId };
 
 export interface LifeStats {
   happiness: number;
@@ -90,6 +92,17 @@ export interface LifeCharacter {
   // list and from incoming chat messages, without needing their
   // cooperation or a moderation backend.
   blockedUids: string[];
+  // ISO date string (YYYY-MM-DD) the player chose at character creation —
+  // flavor/display only (birthday events), doesn't change starting age;
+  // everybody still starts play at age 0 regardless of this date.
+  birthDate: string;
+  faith: FaithId;
+  // Set once at creation by rollWealthTier and never changed afterwards —
+  // the Lagos-slang label for the one-time inheritance below, not a
+  // reflection of current naira (a Famous-tier character can still go
+  // broke, a Shepeteri one can still get rich).
+  wealthTier: WealthTierId;
+  inheritance: number;
 }
 
 export interface LifeStage {
@@ -130,11 +143,40 @@ function randomInt(min: number, max: number): number {
   return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
-export function createCharacter(name: string): LifeCharacter {
+// Sums the quiz answer scores plus a random nudge (the "assigned randomly"
+// part of the design ask — this isn't a pure lookup table) and maps the
+// result onto the ordered WEALTH_TIERS list to get both the Lagos-slang
+// tier label and a concrete one-time inheritance amount within that tier's
+// range. Pure/deterministic given its inputs except for the two
+// Math.random() calls, kept separate from createCharacter so the mapping
+// itself is directly testable.
+export function rollWealthTier(answerScores: number[]): { tier: WealthTierId; inheritance: number } {
+  const total = answerScores.reduce((sum, s) => sum + s, 0) + randomInt(-2, 4);
+  let picked = WEALTH_TIERS[0];
+  for (const tier of WEALTH_TIERS) {
+    if (total >= tier.minScore) picked = tier;
+  }
+  return { tier: picked.id, inheritance: randomInt(picked.inheritanceMin, picked.inheritanceMax) };
+}
+
+export interface CreateCharacterOptions {
+  name: string;
+  birthDate: string;
+  faith: FaithId;
+  wealthTier: WealthTierId;
+  inheritance: number;
+}
+
+// Everybody starts at the same base stats regardless of wealth tier — only
+// the starting naira (the inheritance) and its tier label differ, per the
+// design ask that "everybody starts at the same level".
+export function createCharacter(opts: CreateCharacterOptions): LifeCharacter {
+  const name = opts.name.trim() || "Ngozi";
   const skills: Record<string, number> = {};
   for (const skill of SKILLS) skills[skill.id] = randomInt(0, 10);
+  const tierLabel = WEALTH_TIERS.find((t) => t.id === opts.wealthTier)?.label ?? opts.wealthTier;
   return {
-    name: name.trim() || "Ngozi",
+    name,
     age: 0,
     job: "none",
     stats: {
@@ -142,12 +184,15 @@ export function createCharacter(name: string): LifeCharacter {
       health: randomInt(70, 90),
       smarts: randomInt(40, 60),
       looks: randomInt(40, 60),
-      naira: 0,
+      naira: opts.inheritance,
     },
     alive: true,
     deathCause: null,
     lifespan: randomInt(58, 92),
-    log: [`${name.trim() || "Ngozi"} is born in Lagos.`],
+    log: [
+      `${name} is born in Lagos.`,
+      `Family tier: ${tierLabel} — inherits ₦${opts.inheritance.toLocaleString()}.`,
+    ],
     seenEventIds: [],
     streak: 0,
     assets: [],
@@ -157,6 +202,10 @@ export function createCharacter(name: string): LifeCharacter {
     spentThisYear: 0,
     hustlesThisYear: 0,
     blockedUids: [],
+    birthDate: opts.birthDate,
+    faith: opts.faith,
+    wealthTier: opts.wealthTier,
+    inheritance: opts.inheritance,
   };
 }
 

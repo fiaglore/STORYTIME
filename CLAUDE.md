@@ -19,6 +19,22 @@ the single surviving mode, `src/ui/LifeSim.tsx`.
 
 ## Rules
 
+- Character creation (`src/ui/LifeSim.tsx`'s `!character` screen) is a
+  multi-step flow: name → date of birth → faith → three random "important
+  questions" from `src/content/characterCreation.ts`'s `CREATION_QUESTIONS`
+  pool → a reveal screen. `rollWealthTier` in `lifeSim.ts` sums the three
+  answers' scores plus a random nudge and maps the total onto
+  `WEALTH_TIERS` (shepeteri → famous, ordered low to high) to pick both the
+  Lagos-slang tier label and a concrete one-time inheritance amount inside
+  that tier's naira range — "assigned randomly from the information
+  gathered at sign in" per the design ask, not a deterministic lookup.
+  `createCharacter` takes this (plus name/birthDate/faith) as an options
+  object now, not just a name string — everybody still starts at the same
+  base stats (happiness/health/smarts/looks roll the same ranges
+  regardless of tier), only the starting naira and tier label differ.
+  `birthDate`/`faith` are stored on `LifeCharacter` but are flavor/display
+  only — age still starts at 0 and advances via Age Up regardless of the
+  chosen birth date.
 - Lagos Life mode (`src/engine/lifeSim.ts` + `src/content/lifeEvents.ts`)
   is plain TypeScript. Add new random events to the `LIFE_EVENTS` array in
   `lifeEvents.ts` (pick the right `AgeBand`s; the "infant" band

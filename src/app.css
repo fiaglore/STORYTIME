@@ -995,6 +995,20 @@
   color: var(--text);
 }
 
+.lifesim-intro__options {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.lifesim-reveal__tier {
+  font-family: var(--font-serif);
+  font-weight: 700;
+  font-size: 2rem;
+  color: var(--accent);
+  margin: 0;
+}
+
 .lifesim-stage {
   margin-top: 1rem;
 }

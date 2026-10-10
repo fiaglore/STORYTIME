@@ -13,6 +13,7 @@ import {
   pickEvent,
   resolveChore,
   resolveEvent,
+  rollWealthTier,
   takeJob,
   trainSkill,
   AGE_UP_REQUIREMENTS,
@@ -20,11 +21,18 @@ import {
   MAX_HUSTLES_PER_YEAR,
   type LifeCharacter,
   type JobId,
+  type FaithId,
 } from "../engine/lifeSim";
 import type { LifeEvent } from "../content/lifeEvents";
 import { pickChores, type Chore } from "../content/chores";
 import { SHOP_ITEMS, type ShopItem } from "../content/shop";
 import { SKILLS, SKILL_TRAIN_COST, type Skill } from "../content/skills";
+import {
+  FAITHS,
+  WEALTH_TIERS,
+  pickCreationQuestions,
+  type CreationQuestion,
+} from "../content/characterCreation";
 import { fetchCloudSave, writeCloudSave } from "../engine/firebase";
 import { useAuthStore } from "../engine/authStore";
 import { AccountSection } from "./AccountSection";
@@ -85,9 +93,19 @@ const STAT_LABELS: { key: keyof LifeCharacter["stats"]; label: string; isNaira?:
 
 const EVENT_CHANCE = 0.75;
 
+type CreationStep = "name" | "dob" | "faith" | "questions" | "reveal";
+
 export function LifeSim({ onExit }: Props) {
   const [character, setCharacter] = useState<LifeCharacter | null>(() => loadSaved());
   const [nameInput, setNameInput] = useState("");
+  const [creationStep, setCreationStep] = useState<CreationStep>("name");
+  const [birthDateInput, setBirthDateInput] = useState("");
+  const [faithInput, setFaithInput] = useState<FaithId | null>(null);
+  const [creationQuestions] = useState<CreationQuestion[]>(() => pickCreationQuestions(3));
+  const [answerScores, setAnswerScores] = useState<number[]>([]);
+  const [reveal, setReveal] = useState<{ tier: ReturnType<typeof rollWealthTier>["tier"]; inheritance: number } | null>(
+    null,
+  );
   const [activeEvent, setActiveEvent] = useState<LifeEvent | null>(null);
   const [showJobs, setShowJobs] = useState(false);
   const [showShop, setShowShop] = useState(false);
@@ -121,8 +139,27 @@ export function LifeSim({ onExit }: Props) {
     });
   }, [uid]);
 
+  const handleAnswer = (score: number) => {
+    const nextScores = [...answerScores, score];
+    if (nextScores.length < creationQuestions.length) {
+      setAnswerScores(nextScores);
+      return;
+    }
+    const rolled = rollWealthTier(nextScores);
+    setAnswerScores(nextScores);
+    setReveal(rolled);
+    setCreationStep("reveal");
+  };
+
   const startLife = () => {
-    const next = createCharacter(nameInput);
+    if (!faithInput || !reveal) return;
+    const next = createCharacter({
+      name: nameInput,
+      birthDate: birthDateInput,
+      faith: faithInput,
+      wealthTier: reveal.tier,
+      inheritance: reveal.inheritance,
+    });
     setCharacter(next);
     setActiveEvent(null);
     setPendingChores(pickChores(next, CHORES_PER_YEAR));
@@ -192,6 +229,11 @@ export function LifeSim({ onExit }: Props) {
   const startNewLife = () => {
     setCharacter(null);
     setNameInput("");
+    setCreationStep("name");
+    setBirthDateInput("");
+    setFaithInput(null);
+    setAnswerScores([]);
+    setReveal(null);
     setPendingChores([]);
     setShowJobs(false);
     setShowShop(false);
@@ -200,6 +242,7 @@ export function LifeSim({ onExit }: Props) {
   };
 
   if (!character) {
+    const tierLabel = reveal ? WEALTH_TIERS.find((t) => t.id === reveal.tier)?.label ?? reveal.tier : "";
     return (
       <div className="story-screen">
         <header className="story-screen__header">
@@ -213,20 +256,104 @@ export function LifeSim({ onExit }: Props) {
             Born in Lagos. One life, played year by year — school, hustle, family, and
             whatever the city throws at you.
           </p>
-          <label className="lifesim-intro__label" htmlFor="lifesim-name">
-            Name your character
-          </label>
-          <input
-            id="lifesim-name"
-            className="lifesim-intro__input"
-            value={nameInput}
-            onChange={(e) => setNameInput(e.target.value)}
-            placeholder="e.g. Chiamaka"
-            maxLength={24}
-          />
-          <button className="choice-button choice-button--primary" onClick={startLife}>
-            Begin life
-          </button>
+
+          {creationStep === "name" && (
+            <>
+              <label className="lifesim-intro__label" htmlFor="lifesim-name">
+                Name your character
+              </label>
+              <input
+                id="lifesim-name"
+                className="lifesim-intro__input"
+                value={nameInput}
+                onChange={(e) => setNameInput(e.target.value)}
+                placeholder="e.g. Chiamaka"
+                maxLength={24}
+              />
+              <button
+                className="choice-button choice-button--primary"
+                disabled={!nameInput.trim()}
+                onClick={() => setCreationStep("dob")}
+              >
+                Next
+              </button>
+            </>
+          )}
+
+          {creationStep === "dob" && (
+            <>
+              <label className="lifesim-intro__label" htmlFor="lifesim-dob">
+                Date of birth
+              </label>
+              <input
+                id="lifesim-dob"
+                type="date"
+                className="lifesim-intro__input"
+                value={birthDateInput}
+                onChange={(e) => setBirthDateInput(e.target.value)}
+                max={new Date().toISOString().slice(0, 10)}
+              />
+              <button
+                className="choice-button choice-button--primary"
+                disabled={!birthDateInput}
+                onClick={() => setCreationStep("faith")}
+              >
+                Next
+              </button>
+            </>
+          )}
+
+          {creationStep === "faith" && (
+            <>
+              <label className="lifesim-intro__label">What's your faith?</label>
+              <div className="lifesim-intro__options">
+                {FAITHS.map((f) => (
+                  <button
+                    key={f.id}
+                    className={`choice-button ${faithInput === f.id ? "choice-button--primary" : ""}`}
+                    onClick={() => setFaithInput(f.id)}
+                  >
+                    {f.label}
+                  </button>
+                ))}
+              </div>
+              <button
+                className="choice-button choice-button--primary"
+                disabled={!faithInput}
+                onClick={() => setCreationStep("questions")}
+              >
+                Next
+              </button>
+            </>
+          )}
+
+          {creationStep === "questions" && (
+            <>
+              <p className="lifesim-hint">
+                Question {answerScores.length + 1} of {creationQuestions.length}
+              </p>
+              <label className="lifesim-intro__label">{creationQuestions[answerScores.length].prompt}</label>
+              <div className="lifesim-intro__options">
+                {creationQuestions[answerScores.length].options.map((opt) => (
+                  <button key={opt.label} className="choice-button" onClick={() => handleAnswer(opt.score)}>
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+
+          {creationStep === "reveal" && reveal && (
+            <>
+              <p className="lifesim-reveal__tier">{tierLabel}</p>
+              <p className="lifesim-hint">
+                Your family's story made you — you're starting life with ₦{reveal.inheritance.toLocaleString()}.
+              </p>
+              <button className="choice-button choice-button--primary" onClick={startLife}>
+                Begin life
+              </button>
+            </>
+          )}
         </div>
         <section className="settings-screen__section">
           <h2>Account & cloud sync</h2>

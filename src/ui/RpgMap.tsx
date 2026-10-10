@@ -162,12 +162,13 @@ export function RpgMap({ chapter, storyJson, onEnding, onExit }: Props) {
 
   const latestLine = lines[lines.length - 1]?.text ?? "";
   const activeHotspot = HOTSPOTS[activeSpot];
-  // The bubble is re-centered away from the speaker's exact position when
-  // they're near a stage edge (x) or low enough to sit under the choice
-  // sheet (y, which covers the bottom ~72% of the stage) — otherwise it
-  // clips off-screen or renders invisibly behind the sheet.
-  const bubbleX = Math.min(75, Math.max(25, speakerPos.x));
-  const bubbleY = Math.min(speakerPos.y, 26);
+  // Horizontal position follows the speaker but stays clear of the stage
+  // edges. Vertical position is pinned near the stage top (not derived from
+  // the speaker's Y) and grows downward with a max-height + scroll safety
+  // net — a bubble anchored above a low speaker and sized to its text used
+  // to get clipped by the stage's overflow: hidden on narrow screens when
+  // the line was long enough to wrap to several lines. This was a real bug.
+  const bubbleX = Math.min(72, Math.max(28, speakerPos.x));
 
   return (
     <div className="story-screen" style={{ ["--chapter-accent" as string]: chapter.color }}>
@@ -218,7 +219,7 @@ export function RpgMap({ chapter, storyJson, onEnding, onExit }: Props) {
         />
 
         {dialogueOpen && !ending && latestLine && (
-          <div className="rpg-bubble" style={{ left: `${bubbleX}%`, top: `${bubbleY}%` }}>
+          <div className="rpg-bubble" style={{ left: `${bubbleX}%` }}>
             {latestLine}
           </div>
         )}

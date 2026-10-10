@@ -142,6 +142,19 @@ describe("choice gating (requiresAsset / requiresNaira / grantsAsset)", () => {
     expect(next.assets).toContain("generator");
     expect(next.stats.naira).toBe(rich.stats.naira - 180_000);
   });
+
+  it("the borehole chain works the same way: buy it, then the cheap water-scarcity choice unlocks", () => {
+    const buyEvent = LIFE_EVENTS.find((e) => e.id === "borehole-opportunity")!;
+    const buyIndex = buyEvent.choices.findIndex((c) => c.grantsAsset === "borehole");
+    const rich = baseCharacter({ stats: { ...baseCharacter().stats, naira: 500_000 } });
+    const owner = resolveEvent(rich, buyEvent, buyIndex);
+    expect(owner.assets).toContain("borehole");
+
+    const scarcityEvent = LIFE_EVENTS.find((e) => e.id === "water-scarcity")!;
+    const cheapChoice = scarcityEvent.choices.find((c) => c.requiresAsset === "borehole")!;
+    expect(isChoiceAvailable(owner, cheapChoice)).toBe(true);
+    expect(isChoiceAvailable(rich, cheapChoice)).toBe(false); // rich but no borehole yet
+  });
 });
 
 describe("ageUp resilience streak", () => {

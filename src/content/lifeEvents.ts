@@ -16,7 +16,7 @@ export type AgeBand = "infant" | "child" | "teen" | "adult";
 // Durable goods a character can own, persisted on LifeCharacter.assets.
 // Granted by resolving a choice with grantsAsset, checked by choices with
 // requiresAsset (e.g. you can't choose to run a generator you don't own).
-export type AssetId = "generator" | "pos-business";
+export type AssetId = "generator" | "pos-business" | "borehole";
 
 export interface StatDelta {
   happiness?: number;
@@ -442,6 +442,130 @@ export const LIFE_EVENTS: LifeEvent[] = [
         label: "Just rest it off",
         result: "You feel a little better, but you're not sure what it was.",
         delta: { health: 1, happiness: -1 },
+      },
+    ],
+  },
+  {
+    id: "borehole-opportunity",
+    bands: ["adult"],
+    prompt: "A driller working your street offers to sink a borehole for your compound — ₦250,000, done in a week.",
+    choices: [
+      {
+        label: "Pay for it",
+        result: "No more begging a neighbour's tap or waiting on a tanker.",
+        delta: { naira: -250000, happiness: 3 },
+        requiresNaira: 250000,
+        grantsAsset: "borehole",
+      },
+      {
+        label: "Can't manage that right now",
+        result: "You keep queuing at the compound tap like everyone else.",
+        delta: { happiness: -1 },
+      },
+    ],
+  },
+  {
+    id: "water-scarcity",
+    bands: ["adult"],
+    prompt: "Dry season — the compound tap has run dry and everyone's buying water.",
+    choices: [
+      {
+        label: "Draw from your own borehole",
+        result: "You barely notice the dry season this year.",
+        delta: { naira: -500, happiness: 1 },
+        requiresAsset: "borehole",
+      },
+      {
+        label: "Pay for a water tanker",
+        result: "The tanker man knows the whole street is desperate — he charges for it.",
+        delta: { naira: -15000, happiness: -1 },
+      },
+    ],
+  },
+  {
+    id: "omo-onile-dispute",
+    bands: ["adult"],
+    prompt: "You go to view a plot of land. Before you've even finished looking, \"omo-onile\" youths show up demanding an \"access fee.\"",
+    choices: [
+      {
+        label: "Pay the \"access fee\"",
+        result: "₦10,000 lighter, but at least they let you finish looking.",
+        delta: { naira: -10000, happiness: -1 },
+      },
+      {
+        label: "Walk away from the land deal",
+        result: "Not worth the headache. You cross that plot off your list.",
+        delta: { happiness: -2 },
+      },
+    ],
+  },
+  {
+    id: "burial-contribution",
+    bands: ["adult"],
+    prompt: "A relative has passed, and the family is pooling money for the burial — your share comes to ₦30,000.",
+    choices: [
+      {
+        label: "Contribute your share",
+        result: "It's expected of you, and you don't want to be the one who didn't show up.",
+        delta: { naira: -30000, happiness: 1 },
+        requiresNaira: 30000,
+      },
+      {
+        label: "Explain you can't right now",
+        result: "Nobody says anything to your face. That's almost worse.",
+        delta: { happiness: -3 },
+      },
+    ],
+  },
+  {
+    id: "wedding-costs",
+    bands: ["adult"],
+    prompt: "You're getting married. The question is how big.",
+    choices: [
+      {
+        label: "Go all out — the full owambe",
+        result: "A day you'll both talk about for years. The bills take longer to recover from.",
+        delta: { naira: -300000, happiness: 10 },
+        requiresNaira: 300000,
+      },
+      {
+        label: "Keep it small and simple",
+        result: "Just close family and a quiet reception. Still yours.",
+        delta: { naira: -50000, happiness: 4 },
+      },
+    ],
+  },
+  {
+    id: "keke-dispute",
+    bands: ["adult"],
+    prompt: "The keke rider tries to charge double, claiming \"fuel don cost.\"",
+    choices: [
+      {
+        label: "Argue him down to the normal fare",
+        result: "He grumbles but accepts the normal ₦300.",
+        delta: { naira: -300, happiness: -1 },
+      },
+      {
+        label: "Just pay what he's asking",
+        result: "₦600 for a short ride, but you're not in the mood to argue today.",
+        delta: { naira: -600, happiness: -1 },
+      },
+    ],
+  },
+  {
+    id: "market-levy",
+    bands: ["adult"],
+    prompt: "Touts show up at your stall demanding a daily \"levy\" — again.",
+    choices: [
+      {
+        label: "Pay it to avoid trouble",
+        result: "Cheaper than the alternative, this time.",
+        delta: { naira: -2000 },
+      },
+      {
+        label: "Refuse",
+        result: "Words are exchanged. Your stall stays intact, barely.",
+        delta: { happiness: -3, health: -1 },
       },
     ],
   },

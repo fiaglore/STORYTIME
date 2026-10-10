@@ -30,6 +30,9 @@ export const CHORES: Chore[] = [
   { id: "laundry", bands: ["adult", "teen"], text: "Wash and hang the week's laundry before the rain comes.", delta: { health: -1 } },
   { id: "sweep-compound", bands: ["adult"], text: "It's your turn to sweep the shared compound.", delta: {} },
   { id: "call-landlord", bands: ["adult"], text: "Dodge the landlord's call about the gutter repair levy.", delta: { happiness: -1 } },
+  { id: "data-bundle", bands: ["teen", "adult"], text: "Your data don finish mid-download — top up again.", delta: { naira: -1000 } },
+  { id: "waste-collector", bands: ["adult"], text: "Pay the waste collector boy before he vexes.", delta: { naira: -500 } },
+  { id: "keke-squeeze", bands: ["adult"], text: "Squeeze into a keke to beat the morning rush.", delta: { naira: -300 } },
 ];
 
 export function pickChores(band: AgeBand, count: number): Chore[] {

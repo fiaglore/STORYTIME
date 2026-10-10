@@ -35,6 +35,16 @@ the single surviving mode, `src/ui/LifeSim.tsx`.
   `birthDate`/`faith` are stored on `LifeCharacter` but are flavor/display
   only — age still starts at 0 and advances via Age Up regardless of the
   chosen birth date.
+- Pray / "speak with your God" (`pray()` in `lifeSim.ts`, the always-visible
+  button in `LifeSim.tsx` just under the job line) is capped per year
+  (`MAX_PRAYERS_PER_YEAR`, same shape as `hustle()`) and resolves on a flat
+  50/50 coin flip — "super randomly" per the design ask, with **no**
+  weighting by faith, stats, or anything else. Flavor text differs per
+  `LifeCharacter.faith` (`content/prayers.ts`'s `PRAYER_FLAVORS`), but the
+  odds and the three possible blessing effects (happiness, health, or a
+  small naira gain) are identical across every faith, atheist included —
+  the design explicitly asks players to pick a faith (or none), not for
+  one faith to mechanically outperform another.
 - Lagos Life mode (`src/engine/lifeSim.ts` + `src/content/lifeEvents.ts`)
   is plain TypeScript. Add new random events to the `LIFE_EVENTS` array in
   `lifeEvents.ts` (pick the right `AgeBand`s; the "infant" band

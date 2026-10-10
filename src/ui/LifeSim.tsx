@@ -11,10 +11,12 @@ import {
   lifeStageForAge,
   meetsAgeUpRequirements,
   pickEvent,
+  pray,
   resolveChore,
   resolveEvent,
   rollWealthTier,
   takeJob,
+  MAX_PRAYERS_PER_YEAR,
   trainSkill,
   AGE_UP_REQUIREMENTS,
   JOBS,
@@ -33,6 +35,7 @@ import {
   pickCreationQuestions,
   type CreationQuestion,
 } from "../content/characterCreation";
+import { PRAYER_FLAVORS } from "../content/prayers";
 import { fetchCloudSave, writeCloudSave } from "../engine/firebase";
 import { useAuthStore } from "../engine/authStore";
 import { AccountSection } from "./AccountSection";
@@ -184,6 +187,14 @@ export function LifeSim({ onExit }: Props) {
   const handleHustle = () => {
     if (!character) return;
     setCharacter(hustle(character));
+  };
+
+  const [prayerMessage, setPrayerMessage] = useState<string | null>(null);
+  const handlePray = () => {
+    if (!character) return;
+    const result = pray(character);
+    setCharacter(result.character);
+    if (result.flavorText) setPrayerMessage(result.flavorText);
   };
 
   const handleAgeUp = () => {
@@ -474,6 +485,20 @@ export function LifeSim({ onExit }: Props) {
       </div>
 
       <p className="lifesim-job">{job ? `Working as a ${job.title}` : "No job yet"}</p>
+
+      <div className="lifesim-prayer">
+        <button
+          className="rpg-choice-pill"
+          onClick={handlePray}
+          disabled={character.prayersThisYear >= MAX_PRAYERS_PER_YEAR}
+        >
+          {PRAYER_FLAVORS[character.faith].verb}
+          {character.prayersThisYear >= MAX_PRAYERS_PER_YEAR
+            ? " — not this year"
+            : ` (${MAX_PRAYERS_PER_YEAR - character.prayersThisYear} left)`}
+        </button>
+        {prayerMessage && <p className="lifesim-prayer__message">{prayerMessage}</p>}
+      </div>
 
       <div className="lifesim-tabs">
         {character.age >= 18 && (

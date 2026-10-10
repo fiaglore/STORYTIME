@@ -11,6 +11,7 @@ import {
   isChoiceAvailable,
   marry,
   meetsAgeUpRequirements,
+  pray,
   resolveChore,
   resolveEvent,
   rollWealthTier,
@@ -19,6 +20,7 @@ import {
   unblockPlayer,
   AGE_UP_REQUIREMENTS,
   MAX_HUSTLES_PER_YEAR,
+  MAX_PRAYERS_PER_YEAR,
   type LifeCharacter,
 } from "../src/engine/lifeSim";
 import { WEALTH_TIERS } from "../src/content/characterCreation";
@@ -50,6 +52,7 @@ function baseCharacter(overrides: Partial<LifeCharacter> = {}): LifeCharacter {
     faith: "christian",
     wealthTier: "middle-class",
     inheritance: 0,
+    prayersThisYear: 0,
     ...overrides,
   };
 }
@@ -487,6 +490,46 @@ describe("hustle", () => {
       for (let i = 0; i < MAX_HUSTLES_PER_YEAR; i++) c = hustle(c);
       expect(c.earnedThisYear).toBeGreaterThanOrEqual(hardestReq);
     }
+  });
+});
+
+describe("pray", () => {
+  it("is capped per year and a no-op past the cap", () => {
+    let c = baseCharacter();
+    for (let i = 0; i < MAX_PRAYERS_PER_YEAR; i++) {
+      const result = pray(c);
+      expect(result.flavorText.length).toBeGreaterThan(0);
+      expect(result.character.prayersThisYear).toBe(i + 1);
+      c = result.character;
+    }
+    const capped = pray(c);
+    expect(capped.character).toBe(c);
+    expect(capped.flavorText).toBe("");
+  });
+
+  it("ageUp resets the per-year prayer cap", () => {
+    const maxedOut = baseCharacter({ prayersThisYear: MAX_PRAYERS_PER_YEAR });
+    const next = ageUp(maxedOut);
+    expect(next.prayersThisYear).toBe(0);
+  });
+
+  it("over many trials, produces both answered and unanswered outcomes", () => {
+    let sawAnswered = false;
+    let sawUnanswered = false;
+    for (let i = 0; i < 100; i++) {
+      const c = baseCharacter();
+      const result = pray(c);
+      if (result.answered) sawAnswered = true;
+      else sawUnanswered = true;
+    }
+    expect(sawAnswered).toBe(true);
+    expect(sawUnanswered).toBe(true);
+  });
+
+  it("logs the flavor text for the character's chosen faith", () => {
+    const c = baseCharacter({ faith: "muslim" });
+    const result = pray(c);
+    expect(result.character.log.at(-1)).toContain(result.flavorText);
   });
 });
 

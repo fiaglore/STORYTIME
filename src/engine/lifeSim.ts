@@ -11,6 +11,7 @@ import type { Chore } from "../content/chores";
 import { SKILLS, type Skill } from "../content/skills";
 import type { ShopItem } from "../content/shop";
 import { WEALTH_TIERS, type FaithId, type WealthTierId } from "../content/characterCreation";
+import { PRAYER_FLAVORS, randomFlavor } from "../content/prayers";
 
 export type { AssetId };
 export { bandForAge };
@@ -103,6 +104,8 @@ export interface LifeCharacter {
   // broke, a Shepeteri one can still get rich).
   wealthTier: WealthTierId;
   inheritance: number;
+  // Capped per year same as hustlesThisYear — see pray()/MAX_PRAYERS_PER_YEAR.
+  prayersThisYear: number;
 }
 
 export interface LifeStage {
@@ -206,6 +209,7 @@ export function createCharacter(opts: CreateCharacterOptions): LifeCharacter {
     faith: opts.faith,
     wealthTier: opts.wealthTier,
     inheritance: opts.inheritance,
+    prayersThisYear: 0,
   };
 }
 
@@ -309,6 +313,7 @@ export function ageUp(character: LifeCharacter): LifeCharacter {
     earnedThisYear: income > 0 ? income : 0,
     spentThisYear: 0,
     hustlesThisYear: 0,
+    prayersThisYear: 0,
   };
   const cause = checkDeath(next);
   if (cause) {
@@ -447,6 +452,52 @@ export function hustle(character: LifeCharacter): LifeCharacter {
     hustlesThisYear: character.hustlesThisYear + 1,
     log: [...character.log, `Age ${character.age}: Hustled for a little extra cash.`],
   };
+}
+
+export const MAX_PRAYERS_PER_YEAR = 2;
+// "Super randomly" per the design ask — a flat coin flip, no stat or faith
+// weighting towards being answered.
+const PRAYER_ANSWERED_CHANCE = 0.5;
+
+export interface PrayerResult {
+  character: LifeCharacter;
+  answered: boolean;
+  flavorText: string;
+}
+
+// Pray / "speak with your God" — capped per year (MAX_PRAYERS_PER_YEAR)
+// same shape as hustle(), so it's a small occasional boost rather than a
+// free stat grind. Flavor text comes from content/prayers.ts, keyed by the
+// character's chosen faith; the mechanic itself (odds, effect size) is
+// identical across every faith. Returns the flavor text alongside the
+// character since the UI needs to show which specific line was rolled, not
+// just the resulting stats.
+export function pray(character: LifeCharacter): PrayerResult {
+  if (character.prayersThisYear >= MAX_PRAYERS_PER_YEAR) {
+    return { character, answered: false, flavorText: "" };
+  }
+  const flavor = PRAYER_FLAVORS[character.faith];
+  const answered = Math.random() < PRAYER_ANSWERED_CHANCE;
+  const next: LifeCharacter = { ...character, prayersThisYear: character.prayersThisYear + 1 };
+  if (answered) {
+    // One of three small blessings, picked at random, each modest enough
+    // not to trivialize the economy (compare hustle()'s 1,200-2,800 range).
+    const roll = randomInt(0, 2);
+    const prevNaira = character.stats.naira;
+    const stats =
+      roll === 0
+        ? applyDelta(character.stats, { happiness: randomInt(8, 18) })
+        : roll === 1
+          ? applyDelta(character.stats, { health: randomInt(5, 12) })
+          : applyDelta(character.stats, { naira: randomInt(1000, 3500) });
+    next.stats = stats;
+    Object.assign(next, trackNaira(character, prevNaira, stats.naira));
+  } else {
+    next.stats = applyDelta(character.stats, { happiness: randomInt(-2, 0) });
+  }
+  const flavorText = randomFlavor(answered ? flavor.answered : flavor.unanswered);
+  next.log = [...character.log, `Age ${character.age}: ${flavorText}`];
+  return { character: next, answered, flavorText };
 }
 
 // Marries this character to another real player — purely local/pure, see

@@ -1009,6 +1009,20 @@
   margin: 0;
 }
 
+.lifesim-prayer {
+  margin-top: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.lifesim-prayer__message {
+  font-style: italic;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  margin: 0;
+}
+
 .lifesim-stage {
   margin-top: 1rem;
 }

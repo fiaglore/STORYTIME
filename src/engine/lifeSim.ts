@@ -457,11 +457,18 @@ export function reviveCharacter(character: LifeCharacter): LifeCharacter {
     { ...character.stats, naira: character.stats.naira - REVIVE_COST },
     { health: 40 },
   );
+  // A death from old age (age >= lifespan) would otherwise immediately
+  // re-trigger checkDeath on the very next ageUp, making the revive a
+  // no-op that just burns REVIVE_COST for nothing — this was a real bug.
+  // Extending the lifespan buys the revived character real extra years,
+  // same as the health restore above buys a health-death real recovery.
+  const lifespan = character.age >= character.lifespan ? character.age + randomInt(5, 10) : character.lifespan;
   return {
     ...character,
     alive: true,
     deathCause: null,
     stats,
+    lifespan,
     ...trackNaira(character, prevNaira, stats.naira),
     log: [...character.log, `Age ${character.age}: A huge hospital bill later, ${character.name} is back.`],
   };

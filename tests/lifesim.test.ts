@@ -233,6 +233,21 @@ describe("reviveCharacter", () => {
     const alive = baseCharacter({ stats: { happiness: 50, health: 50, smarts: 50, looks: 50, naira: 10_000_000 } });
     expect(reviveCharacter(alive)).toBe(alive);
   });
+
+  it("extends the lifespan when reviving an old-age death, so the next ageUp doesn't immediately re-kill them", () => {
+    const dead = baseCharacter({
+      age: 80,
+      lifespan: 80,
+      alive: false,
+      deathCause: "Old age, peacefully, surrounded by family.",
+      stats: { happiness: 50, health: 0, smarts: 50, looks: 50, naira: REVIVE_COST + 10_000 },
+    });
+    const revived = reviveCharacter(dead);
+    expect(revived.alive).toBe(true);
+    expect(revived.lifespan).toBeGreaterThan(revived.age);
+    const next = ageUp(revived);
+    expect(next.alive).toBe(true);
+  });
 });
 
 describe("treatInjury", () => {

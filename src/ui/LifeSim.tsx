@@ -68,14 +68,13 @@ const INTERVIEW_BONUS: Record<InterviewResult, { naira?: number; happiness?: num
 // each year before Age Up is available — the deliberate, semi-tedious
 // daily-grind friction the design asks for. Age bands with no chores in
 // the pool (infancy) just get an empty list and Age Up stays immediate.
-// Only applies past AGE_SCHOOL_CHOICE_CUTOFF — younger ages get the
-// school-choice screen instead (see handleAgeUp).
 const CHORES_PER_YEAR = 4;
 
-// How many life events (content/lifeEvents.ts) fire per year, past the
-// school-choice age window — each resolved one at a time via pendingEvents,
-// same queue shape as pendingChores. pickEvent's own repeat-once-exhausted
-// fallback means a short age-band pool can still fill this every year.
+// How many life events (content/lifeEvents.ts) fire per year, each
+// resolved one at a time via pendingEvents, same queue shape as
+// pendingChores. pickEvent's own repeat-once-exhausted fallback means a
+// short age-band pool can still fill this every year (deduped within the
+// batch in handleAgeUp).
 const EVENTS_PER_YEAR = 5;
 
 // With 600 shop items, rendering every match is wasteful and the list
@@ -144,10 +143,16 @@ export function LifeSim({ onExit }: Props) {
   const [pendingJob, setPendingJob] = useState<JobId | null>(null);
   // Not persisted in the save — a reload just rolls a fresh set of chores
   // for the current year rather than remembering which were already done,
-  // which is fine for low-stakes busywork like this.
+  // which is fine for low-stakes busywork like this. pickChores/pickEvent
+  // already return nothing for the infant band (ages 0-2) on their own —
+  // there's no separate age cutoff needed here, and gating on
+  // AGE_SCHOOL_CHOICE_CUTOFF used to wrongly suppress ages 3-10's real
+  // child-band chores/events too (the school choice is meant to be one
+  // extra step alongside them, not a replacement for a decade of
+  // gameplay) — that was a real bug.
   const [pendingChores, setPendingChores] = useState<Chore[]>(() => {
     const saved = loadSaved();
-    return saved && saved.alive && saved.age > AGE_SCHOOL_CHOICE_CUTOFF ? pickChores(saved, CHORES_PER_YEAR) : [];
+    return saved && saved.alive ? pickChores(saved, CHORES_PER_YEAR) : [];
   });
   const [choreAttempt, setChoreAttempt] = useState(0);
   const uid = useAuthStore((s) => s.user?.uid);
@@ -282,15 +287,27 @@ export function LifeSim({ onExit }: Props) {
       return;
     const aged = ageUp(character);
     setCharacter(aged);
-    // Ages through AGE_SCHOOL_CHOICE_CUTOFF get the school-choice screen
-    // instead of the normal chores/events grind — see the render logic
-    // below for where that screen is shown.
-    if (aged.alive && aged.age > AGE_SCHOOL_CHOICE_CUTOFF) {
+    // pickChores/pickEvent already return nothing for the infant band
+    // (ages 0-2) on their own, so this runs unconditionally — ages 3-10
+    // get real child-band chores and events same as any other year, with
+    // the school-choice screen (shown separately below, once, whenever
+    // age <= AGE_SCHOOL_CHOICE_CUTOFF && !schoolId) as one extra step
+    // alongside them, not instead of them.
+    if (aged.alive) {
       setPendingChores(pickChores(aged, CHORES_PER_YEAR));
+      // Dedupes within this year's batch — pickEvent only avoids repeats
+      // against seenEventIds, which doesn't update until an event is
+      // actually resolved, so without this the same event could be drawn
+      // twice in one year. Stops early once the band's pool is smaller
+      // than EVENTS_PER_YEAR rather than forcing a duplicate in.
       const events: LifeEvent[] = [];
-      for (let i = 0; i < EVENTS_PER_YEAR; i++) {
+      const pickedIds = new Set<string>();
+      for (let attempts = 0; events.length < EVENTS_PER_YEAR && attempts < EVENTS_PER_YEAR * 4; attempts++) {
         const event = pickEvent(aged);
-        if (event) events.push(event);
+        if (!event) break;
+        if (pickedIds.has(event.id)) continue;
+        pickedIds.add(event.id);
+        events.push(event);
       }
       setPendingEvents(events);
     }

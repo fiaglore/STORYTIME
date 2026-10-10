@@ -53,8 +53,12 @@ the single surviving mode, `src/ui/LifeSim.tsx`.
   (big health/looks hit) and appends `maimResult` to the normal result
   line — the character stays alive. Both are recoverable for naira:
   `reviveCharacter`/`REVIVE_COST` brings a dead character back (shown as a
-  "Pay to revive" button on the obituary screen, only when affordable);
-  `treatInjury`/`TREATMENT_COST`/`CRITICAL_HEALTH_THRESHOLD` heals a
+  "Pay to revive" button on the obituary screen, only when affordable).
+  If the death was from old age (`age >= lifespan`), reviving also
+  extends `lifespan` by a random 5-10 years — without this, a revived
+  old-age death would just die again, identically, on the very next
+  `ageUp`, making the whole revive a naira sink for nothing; this was a
+  real bug. `treatInjury`/`TREATMENT_COST`/`CRITICAL_HEALTH_THRESHOLD` heals a
   maimed-but-alive character whose health has dropped critically low
   (shown as a banner in the main play screen). Most event choices don't
   carry `risk` at all — reserve it for choices already describing genuine
@@ -159,19 +163,30 @@ the single surviving mode, `src/ui/LifeSim.tsx`.
   band's minEarn` still holds (there's a 50-trial regression test for
   this — keep it).
 - Ages 0 through `AGE_SCHOOL_CHOICE_CUTOFF` (10) get a one-time school
-  choice instead of the normal chores/events grind — `src/content/
-  schools.ts`'s `SCHOOLS`, gated by `schoolsAvailableTo(wealthTier)` (a
-  school's `minTier` must be at or below the character's own tier, same
-  "richer unlocks more" direction as every other wealth gate).
-  `chooseSchool` sets `LifeCharacter.schoolId` once and it's never
-  cleared; `ageUp` applies that school's `costPerYear`/`smartsPerYear`/
-  `happinessPerYear` every year through the cutoff, then stops (the field
-  stays set, just inert past that age). `LifeSim.tsx` shows the school
-  picker instead of chores/events whenever `age <= cutoff && !schoolId`.
-  Past the cutoff, a year gets `CHORES_PER_YEAR` (4) chores and up to
-  `EVENTS_PER_YEAR` (5) life events, each resolved one at a time via a
-  `pendingEvents` queue (same shape as `pendingChores`) before Age Up is
-  offered.
+  choice as *one extra step*, not a replacement for a decade of
+  gameplay — `src/content/schools.ts`'s `SCHOOLS`, gated by
+  `schoolsAvailableTo(wealthTier)` (a school's `minTier` must be at or
+  below the character's own tier, same "richer unlocks more" direction as
+  every other wealth gate). `chooseSchool` sets `LifeCharacter.schoolId`
+  once and it's never cleared; `ageUp` applies that school's
+  `costPerYear`/`smartsPerYear`/`happinessPerYear` every year through the
+  cutoff, then stops (the field stays set, just inert past that age).
+  `LifeSim.tsx` shows the school picker whenever `age <= cutoff &&
+  !schoolId` — it only blocks the one year it's chosen in (every year
+  after, `schoolId` is already set). Every year still gets
+  `CHORES_PER_YEAR` (4) chores and up to `EVENTS_PER_YEAR` (5) life
+  events regardless of age, resolved one at a time via `pendingChores`/
+  `pendingEvents` queues before Age Up is offered — `pickChores`/
+  `pickEvent` already return nothing for the infant band (ages 0-2) on
+  their own, so ages 3-10 get the same real child-band content as any
+  other year. **This used to be gated on `age > AGE_SCHOOL_CHOICE_CUTOFF`
+  outright, which silently zeroed out ages 3-10's gameplay entirely (just
+  the school pick, then ten years of clicking "Age up") — a real bug,
+  don't reintroduce that gate.** `handleAgeUp`'s event-picking loop also
+  dedupes within the batch (`pickedIds`) — `pickEvent` only avoids
+  repeats against `seenEventIds`, which doesn't update until an event is
+  actually resolved, so without the dedupe the same event could be drawn
+  twice in one year.
 - Age Up is deliberately semi-tedious: `src/content/chores.ts`'s `CHORES`
   is a pool of small daily tasks (distinct from `LIFE_EVENTS`, which have
   real branching choices and bigger stakes); `pickChores(character,
@@ -276,7 +291,12 @@ note in Lagos Life's intro screen).
   `watchIncomingProposals`/`watchOutgoingProposals` subscription sees it)
   and call `marry()` on their own character, persisting it themselves.
   This is why `marry()` is a plain local/pure function in `lifeSim.ts` with
-  no Firestore call in it. `firestore.rules` needs its own
+  no Firestore call in it. `firestore.rules`' `marriageProposals` update
+  rule only lets `toUid` change `status`, only from `pending` to
+  `accepted`/`declined`, and pins every other field — the sender used to
+  also be allowed to update the doc, meaning a sender could accept their
+  own proposal and force a marriage the other side never agreed to; that
+  was a real bug. `firestore.rules` needs its own
   `lifesimPresence/{uid}` and `marriageProposals/{id}` blocks (already in
   the repo's copy, needs publishing same as every other collection here).
 - **Send money** (same `LifeSimSocial.tsx`, a "Send money" button next to

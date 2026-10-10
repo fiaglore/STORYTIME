@@ -6,12 +6,19 @@ rules_version = '2';
 // but still only writable by their own owner; they hold nothing but a
 // character name/age, never an email or save data.
 //
-// Marriage proposals are readable/writable by the two uids named on the
-// doc only. Money transfers follow the same shape — only the sender/
-// recipient can read one, only the sender can create it (and only with
-// their own uid as fromUid and a positive amount), and the recipient is
-// the only one allowed to flip claimed to true (the sender can't un-claim
-// or alter the amount after creating it). Chats and their messages are
+// Marriage proposals are readable by the two uids named on the doc, but
+// only the recipient (toUid) can respond to one — a sender could
+// otherwise accept their own proposal and force a marriage the other
+// side never agreed to; that was a real bug. The update rule also pins
+// every field but status so a response can't rewrite who proposed to
+// whom, and only allows a pending -> accepted/declined transition, not
+// an already-resolved proposal being flipped again. Money transfers
+// follow the same "only the other party can act" shape — only the
+// sender/recipient can read one, only the sender can create it (and only
+// with their own uid as fromUid and a positive amount), and the
+// recipient is the only one allowed to flip claimed to true (the sender
+// can't un-claim or alter the amount after creating it). Chats and their
+// messages are
 // readable/writable only by the two participants on the parent chat doc
 // (checked via a get() lookup from inside the messages subcollection,
 // since a message itself doesn't carry the participant list). Reports are
@@ -34,7 +41,13 @@ service cloud.firestore {
         (request.auth.uid == resource.data.fromUid || request.auth.uid == resource.data.toUid);
       allow create: if request.auth != null && request.auth.uid == request.resource.data.fromUid;
       allow update: if request.auth != null &&
-        (request.auth.uid == resource.data.fromUid || request.auth.uid == resource.data.toUid);
+        request.auth.uid == resource.data.toUid &&
+        resource.data.status == "pending" &&
+        (request.resource.data.status == "accepted" || request.resource.data.status == "declined") &&
+        request.resource.data.fromUid == resource.data.fromUid &&
+        request.resource.data.toUid == resource.data.toUid &&
+        request.resource.data.fromName == resource.data.fromName &&
+        request.resource.data.toName == resource.data.toName;
       allow delete: if false;
     }
     match /moneyTransfers/{transferId} {

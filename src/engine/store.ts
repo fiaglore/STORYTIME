@@ -6,6 +6,8 @@ import {
   type ChapterProgress,
   type SaveData,
 } from "./saves";
+import { fetchCloudSave, writeCloudSave } from "./firebase";
+import { useAuthStore } from "./authStore";
 
 interface GameState extends SaveData {
   hydrated: boolean;
@@ -15,6 +17,7 @@ interface GameState extends SaveData {
   getFlag: (key: string) => string | undefined;
   updateSettings: (settings: Partial<SaveData["settings"]>) => void;
   replaceSave: (data: SaveData) => void;
+  syncFromCloud: (uid: string) => Promise<void>;
 }
 
 // Only the plain-data fields are cloneable into IndexedDB — the store also
@@ -22,7 +25,10 @@ interface GameState extends SaveData {
 // through to writeSave.
 function persist(state: SaveData) {
   const { version, progress, flags, settings } = state;
-  void writeSave({ version, progress, flags, settings });
+  const plain = { version, progress, flags, settings };
+  void writeSave(plain);
+  const uid = useAuthStore.getState().user?.uid;
+  if (uid) void writeCloudSave(uid, { storyProgress: plain });
 }
 
 export const useGameStore = create<GameState>((set, get) => ({
@@ -74,5 +80,20 @@ export const useGameStore = create<GameState>((set, get) => ({
   replaceSave: (data) => {
     set({ ...data, hydrated: true });
     persist(data);
+  },
+
+  // Called once on sign-in (see App.tsx): if the account already has cloud
+  // progress, that becomes the local save (cloud is the source of truth
+  // across devices); otherwise the current local save is the first thing
+  // pushed up, via persist()'s own cloud write.
+  syncFromCloud: async (uid) => {
+    const cloud = await fetchCloudSave(uid);
+    if (cloud?.storyProgress) {
+      const data = cloud.storyProgress as SaveData;
+      set({ ...defaultSave, ...data, hydrated: true });
+      void writeSave({ ...defaultSave, ...data });
+    } else {
+      persist(get());
+    }
   },
 }));

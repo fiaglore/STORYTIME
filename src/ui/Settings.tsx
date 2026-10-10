@@ -1,5 +1,6 @@
 import { useGameStore } from "../engine/store";
 import { exportSave, importSave } from "../engine/saves";
+import { AccountSection } from "./AccountSection";
 
 interface Props {
   onBack: () => void;
@@ -83,6 +84,11 @@ export function Settings({ onBack }: Props) {
           />
           Ambient audio
         </label>
+      </section>
+
+      <section className="settings-screen__section">
+        <h2>Account & cloud sync</h2>
+        <AccountSection />
       </section>
 
       <section className="settings-screen__section">

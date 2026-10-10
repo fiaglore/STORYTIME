@@ -19,6 +19,9 @@ separate systems — don't assume one when working on the other.
   run in the browser with inkjs
 - idb-keyval for saves (IndexedDB), localStorage only for the age-gate flag
 - vite-plugin-pwa; deployed to GitHub Pages by .github/workflows/deploy.yml
+- Firebase (Auth + Firestore) for optional cloud save/sign-in — see
+  "Firebase / cloud save" below. Entirely optional: with no config, both
+  game modes work exactly as before, fully local.
 
 ## Rules
 
@@ -66,16 +69,54 @@ separate systems — don't assume one when working on the other.
   out) so they stay testable without a browser; see `tests/lifesim.test.ts`.
 - Run `npm test` and `npm run build` before finishing any task.
 
+## Firebase / cloud save
+
+Optional: if `VITE_FIREBASE_*` env vars aren't set, `firebaseEnabled` is
+`false` and both game modes behave exactly as before this feature existed
+(IndexedDB / localStorage only, no auth UI shown beyond a "cloud save
+isn't set up" note in Settings / Lagos Life's intro screen).
+
+- Config lives in `.env` (gitignored, local dev) or `.env.production`
+  (committed — safe to commit: Firebase web config values aren't secrets,
+  access control is enforced by `firestore.rules`, not by hiding these).
+  See `.env.example` for the exact variable names, and the Firebase
+  console path to find each one (Project settings -> your web app -> SDK
+  setup and configuration).
+- `firestore.rules` (repo root) must be pasted into Firebase Console ->
+  Firestore Database -> Rules -> Publish. It restricts each user to only
+  read/write their own `users/{uid}` document — nothing in this repo
+  enforces that except those rules, so don't skip publishing them.
+- `src/engine/firebase.ts` lazy-loads the `firebase/*` packages via
+  dynamic `import()`, only once something actually calls an auth/Firestore
+  function (not at app boot, even when configured). A static top-level
+  import of the SDK nearly tripled the gzipped main bundle (109KB ->
+  281KB) for a PWA meant to work fully offline — don't reintroduce that by
+  importing from `firebase/app`, `firebase/auth` or `firebase/firestore`
+  anywhere outside this file.
+- `src/engine/authStore.ts` is the single Zustand store for sign-in state,
+  shared by both game modes. `src/ui/AccountSection.tsx` is the
+  sign-in/sign-up/sign-out widget, embedded in both Settings (story mode)
+  and Lagos Life's intro screen.
+- Cloud sync is "pull on sign-in, push on every local save": see
+  `useGameStore.syncFromCloud` (story mode, triggered from `App.tsx`) and
+  the `uid`-keyed effect in `LifeSim.tsx`. There's no conflict resolution
+  UI — whichever save the pull finds (cloud if present, else local)
+  becomes authoritative for that device from then on.
+
 ## Repo layout
 
 ```
 chapters/*.ink              one Ink file per chapter (source of truth)
+firestore.rules             Firestore security rules (paste into Firebase console)
+.env.example                Firebase config var names (copy to .env / .env.production)
 scripts/compile-ink.mjs     compiles chapters/*.ink -> src/content/compiled/*.json
 scripts/smoke-lifesim.mjs   manual Playwright smoke test for Lagos Life mode
 src/engine/                 inkRunner (React hook wrapping inkjs), lifeSim (pure life-sim
-                             engine), Zustand store, saves
+                             engine), firebase.ts (lazy-loaded Firebase SDK wrapper),
+                             authStore (sign-in state), Zustand store, saves
 src/scenes/                 mini-scene React components (frying, change-making, ...)
 src/ui/                     map hub, RpgMap (chapter play screen), LifeSim (life-sim mode),
+                             AccountSection (sign-in/up/out widget),
                              endings gallery, settings, etc.
 src/content/                chapter metadata (chapters.json), lifeEvents.ts (life-sim event
                              pool), glossary.json, compiled ink JSON

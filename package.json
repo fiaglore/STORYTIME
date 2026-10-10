@@ -14,6 +14,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "firebase": "^13.0.0",
     "howler": "^2.2.4",
     "idb-keyval": "^6.3.0",
     "inkjs": "^2.4.0",

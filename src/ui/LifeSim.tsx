@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ageUp,
   availableJobs,
@@ -10,6 +10,9 @@ import {
   type JobId,
 } from "../engine/lifeSim";
 import type { LifeEvent } from "../content/lifeEvents";
+import { fetchCloudSave, writeCloudSave } from "../engine/firebase";
+import { useAuthStore } from "../engine/authStore";
+import { AccountSection } from "./AccountSection";
 
 interface Props {
   onExit: () => void;
@@ -26,13 +29,14 @@ function loadSaved(): LifeCharacter | null {
   }
 }
 
-function persist(character: LifeCharacter | null) {
+function persist(character: LifeCharacter | null, uid: string | undefined) {
   try {
     if (character) localStorage.setItem(SAVE_KEY, JSON.stringify(character));
     else localStorage.removeItem(SAVE_KEY);
   } catch {
     // localStorage unavailable — life sim just won't survive a refresh.
   }
+  if (uid) void writeCloudSave(uid, { lifeSim: character });
 }
 
 const STAT_LABELS: { key: keyof LifeCharacter["stats"]; label: string; isNaira?: boolean }[] = [
@@ -49,10 +53,24 @@ export function LifeSim({ onExit }: Props) {
   const [nameInput, setNameInput] = useState("");
   const [activeEvent, setActiveEvent] = useState<LifeEvent | null>(null);
   const [showJobs, setShowJobs] = useState(false);
+  const uid = useAuthStore((s) => s.user?.uid);
+  const pulledForUid = useRef<string | null>(null);
 
   useEffect(() => {
-    persist(character);
+    persist(character, uid);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [character]);
+
+  // On sign-in, prefer whatever life is already saved to this account (so
+  // switching devices picks up where you left off) over whatever's in this
+  // browser's localStorage. Runs once per uid, not on every character edit.
+  useEffect(() => {
+    if (!uid || pulledForUid.current === uid) return;
+    pulledForUid.current = uid;
+    void fetchCloudSave(uid).then((cloud) => {
+      if (cloud?.lifeSim) setCharacter(cloud.lifeSim as LifeCharacter);
+    });
+  }, [uid]);
 
   const startLife = () => {
     setCharacter(createCharacter(nameInput));
@@ -115,6 +133,10 @@ export function LifeSim({ onExit }: Props) {
             Begin life
           </button>
         </div>
+        <section className="settings-screen__section">
+          <h2>Account & cloud sync</h2>
+          <AccountSection />
+        </section>
       </div>
     );
   }

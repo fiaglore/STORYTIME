@@ -12,6 +12,11 @@ dist
 dist-ssr
 *.local
 
+# Firebase config (see .env.example) — values aren't secret per Firebase's
+# own docs, but kept local so each deployment uses its own project.
+.env
+.env.local
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

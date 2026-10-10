@@ -900,3 +900,28 @@
   font-style: italic;
   max-width: 26rem;
 }
+
+/* ---------- account / cloud sync ---------- */
+
+.account-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  max-width: 24rem;
+}
+
+.account-section__status {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+
+.account-section__error {
+  font-size: 0.85rem;
+  color: var(--danger);
+}
+
+.account-section__disabled {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  font-style: italic;
+}

@@ -71,10 +71,20 @@ A few conventions, also documented in `CLAUDE.md`:
 - Every declared numeric Ink variable becomes a meter automatically — no
   separate React wiring needed per chapter.
 
+## Cloud save (optional)
+
+Both game modes can sync progress to Firebase (email/password sign-in +
+Firestore) instead of staying purely local. It's entirely opt-in — with
+no config, nothing changes from local-only saves. See the "Firebase /
+cloud save" section in `CLAUDE.md` for the full setup (env vars,
+`firestore.rules`, where cloud sync is wired in).
+
 ## Deployment
 
 `.github/workflows/deploy.yml` builds, tests and publishes `dist/` to
-GitHub Pages on every push to `main`.
+GitHub Pages on every push to `main`. If you've set up Firebase, put the
+config in a committed `.env.production` (not `.env` — that's gitignored
+and local-only) so the deployed build picks it up too.
 
 ## License
 

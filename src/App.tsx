@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useGameStore } from "./engine/store";
+import { useAuthStore } from "./engine/authStore";
 import { TitleScreen } from "./ui/TitleScreen";
 import { MapHub } from "./ui/MapHub";
 import { StorytimeOpening } from "./ui/StorytimeOpening";
@@ -41,11 +42,25 @@ export default function App() {
   const hydrate = useGameStore((s) => s.hydrate);
   const hydrated = useGameStore((s) => s.hydrated);
   const markChapterEnding = useGameStore((s) => s.markChapterEnding);
+  const syncFromCloud = useGameStore((s) => s.syncFromCloud);
   const [screen, setScreen] = useState<Screen>({ name: "title" });
+
+  const initAuth = useAuthStore((s) => s.init);
+  const uid = useAuthStore((s) => s.user?.uid);
+  const syncedForUid = useRef<string | null>(null);
 
   useEffect(() => {
     void hydrate();
-  }, [hydrate]);
+    initAuth();
+  }, [hydrate, initAuth]);
+
+  // Pull this account's cloud story-mode progress once per sign-in (not on
+  // every render) — see useGameStore.syncFromCloud for the merge rule.
+  useEffect(() => {
+    if (!uid || !hydrated || syncedForUid.current === uid) return;
+    syncedForUid.current = uid;
+    void syncFromCloud(uid);
+  }, [uid, hydrated, syncFromCloud]);
 
   if (!hydrated) {
     return <div className="app-loading">Loading Lagos…</div>;

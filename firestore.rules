@@ -7,13 +7,17 @@ rules_version = '2';
 // character name/age, never an email or save data.
 //
 // Marriage proposals are readable/writable by the two uids named on the
-// doc only. Chats and their messages are readable/writable only by the
-// two participants on the parent chat doc (checked via a get() lookup
-// from inside the messages subcollection, since a message itself doesn't
-// carry the participant list). Reports are write-only from the client —
-// there's no in-app moderation panel, so nobody can read reports back out
-// through these rules; the project owner reviews them via the Firebase
-// console, which bypasses rules entirely.
+// doc only. Money transfers follow the same shape — only the sender/
+// recipient can read one, only the sender can create it (and only with
+// their own uid as fromUid and a positive amount), and the recipient is
+// the only one allowed to flip claimed to true (the sender can't un-claim
+// or alter the amount after creating it). Chats and their messages are
+// readable/writable only by the two participants on the parent chat doc
+// (checked via a get() lookup from inside the messages subcollection,
+// since a message itself doesn't carry the participant list). Reports are
+// write-only from the client — there's no in-app moderation panel, so
+// nobody can read reports back out through these rules; the project owner
+// reviews them via the Firebase console, which bypasses rules entirely.
 //
 // Paste this into Firebase Console -> Firestore Database -> Rules -> Publish.
 service cloud.firestore {
@@ -31,6 +35,20 @@ service cloud.firestore {
       allow create: if request.auth != null && request.auth.uid == request.resource.data.fromUid;
       allow update: if request.auth != null &&
         (request.auth.uid == resource.data.fromUid || request.auth.uid == resource.data.toUid);
+      allow delete: if false;
+    }
+    match /moneyTransfers/{transferId} {
+      allow read: if request.auth != null &&
+        (request.auth.uid == resource.data.fromUid || request.auth.uid == resource.data.toUid);
+      allow create: if request.auth != null &&
+        request.auth.uid == request.resource.data.fromUid &&
+        request.resource.data.amount > 0 &&
+        request.resource.data.claimed == false;
+      allow update: if request.auth != null &&
+        request.auth.uid == resource.data.toUid &&
+        request.resource.data.amount == resource.data.amount &&
+        request.resource.data.fromUid == resource.data.fromUid &&
+        request.resource.data.toUid == resource.data.toUid;
       allow delete: if false;
     }
     match /chats/{chatId} {

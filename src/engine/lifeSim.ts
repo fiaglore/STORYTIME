@@ -583,6 +583,35 @@ export function pray(character: LifeCharacter): PrayerResult {
   return { character: next, answered, flavorText };
 }
 
+// Player-to-player money gifts — "send money to help" per the design ask.
+// Pure/local, same shape as marry(): the Firestore write/read happens in
+// LifeSimSocial.tsx via firebase.ts's sendMoneyTransfer/
+// watchIncomingTransfers, these just update the local character. Refuses
+// (rather than throws) a non-positive or unaffordable amount.
+export function sendMoney(character: LifeCharacter, amount: number): LifeCharacter {
+  if (amount <= 0 || character.stats.naira < amount) return character;
+  const prevNaira = character.stats.naira;
+  const stats = applyDelta(character.stats, { naira: -amount });
+  return {
+    ...character,
+    stats,
+    ...trackNaira(character, prevNaira, stats.naira),
+    log: [...character.log, `Age ${character.age}: Sent ₦${amount.toLocaleString()} to help someone out.`],
+  };
+}
+
+export function receiveMoney(character: LifeCharacter, amount: number, fromName: string): LifeCharacter {
+  if (amount <= 0) return character;
+  const prevNaira = character.stats.naira;
+  const stats = applyDelta(character.stats, { naira: amount });
+  return {
+    ...character,
+    stats,
+    ...trackNaira(character, prevNaira, stats.naira),
+    log: [...character.log, `Age ${character.age}: ${fromName} sent you ₦${amount.toLocaleString()}.`],
+  };
+}
+
 // Marries this character to another real player — purely local/pure, see
 // CLAUDE.md's "Marriage" section for why Firestore isn't touched here:
 // each side sets their own spouseUid once they independently observe the

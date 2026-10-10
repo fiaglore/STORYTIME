@@ -12,10 +12,12 @@ import {
   marry,
   meetsAgeUpRequirements,
   pray,
+  receiveMoney,
   resolveChore,
   resolveEvent,
   reviveCharacter,
   rollWealthTier,
+  sendMoney,
   takeJob,
   treatInjury,
   trainSkill,
@@ -666,6 +668,26 @@ describe("pray", () => {
     const c = baseCharacter({ faith: "muslim" });
     const result = pray(c);
     expect(result.character.log.at(-1)).toContain(result.flavorText);
+  });
+});
+
+describe("sendMoney / receiveMoney", () => {
+  it("sendMoney deducts naira and logs it, refusing an unaffordable or non-positive amount", () => {
+    const c = baseCharacter({ stats: { happiness: 50, health: 50, smarts: 50, looks: 50, naira: 10_000 } });
+    const sent = sendMoney(c, 4000);
+    expect(sent.stats.naira).toBe(6000);
+    expect(sent.log.at(-1)).toContain("Sent ₦4,000");
+
+    expect(sendMoney(c, 20_000)).toBe(c);
+    expect(sendMoney(c, 0)).toBe(c);
+    expect(sendMoney(c, -500)).toBe(c);
+  });
+
+  it("receiveMoney credits naira and logs the sender's name", () => {
+    const c = baseCharacter({ stats: { happiness: 50, health: 50, smarts: 50, looks: 50, naira: 1000 } });
+    const next = receiveMoney(c, 5000, "Tunde");
+    expect(next.stats.naira).toBe(6000);
+    expect(next.log.at(-1)).toContain("Tunde sent you ₦5,000");
   });
 });
 

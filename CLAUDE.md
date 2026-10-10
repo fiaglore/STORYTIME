@@ -215,6 +215,17 @@ note in Lagos Life's intro screen).
   no Firestore call in it. `firestore.rules` needs its own
   `lifesimPresence/{uid}` and `marriageProposals/{id}` blocks (already in
   the repo's copy, needs publishing same as every other collection here).
+- **Send money** (same `LifeSimSocial.tsx`, a "Send money" button next to
+  a nearby player or the spouse): "send money to each other to help" per
+  the design ask. No accept/decline step — `sendMoney` in `lifeSim.ts`
+  deducts the sender's own naira and persists it immediately, and
+  `sendMoneyTransfer` writes a `moneyTransfers/{id}` doc. The recipient's
+  client watches `watchIncomingTransfers` (their uid, unclaimed only),
+  credits their own naira locally via `receiveMoney`, and calls
+  `claimMoneyTransfer` to mark it claimed — same "neither side writes the
+  other's save document" principle as marriage; `firestore.rules` only
+  lets the recipient flip `claimed` and only lets the sender create a doc
+  with a positive amount and their own uid as `fromUid`.
 - **Chat** (same `LifeSimSocial.tsx`): free-text, pairwise, any two
   players who can see each other in the nearby-players list (or a married
   spouse). `chatId` is a deterministic sort of the two uids

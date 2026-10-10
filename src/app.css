@@ -1317,7 +1317,8 @@
   font-weight: 700;
 }
 
-.lifesim-chat {
+.lifesim-chat,
+.lifesim-send-money {
   display: flex;
   flex-direction: column;
   gap: 0.6rem;

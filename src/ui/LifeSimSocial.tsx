@@ -2,23 +2,29 @@ import { useEffect, useRef, useState } from "react";
 import {
   blockPlayer,
   marry,
+  receiveMoney,
+  sendMoney,
   type LifeCharacter,
 } from "../engine/lifeSim";
 import {
   chatIdFor,
+  claimMoneyTransfer,
   clearLifeSimPresence,
   proposeMarriage,
   reportMessage,
   respondToProposal,
   sendChatMessage,
+  sendMoneyTransfer,
   watchChatMessages,
   watchIncomingProposals,
+  watchIncomingTransfers,
   watchLifeSimPresence,
   watchOutgoingProposals,
   writeLifeSimPresence,
   type ChatMessageDoc,
   type LifeSimPresenceDoc,
   type MarriageProposalDoc,
+  type MoneyTransferDoc,
 } from "../engine/firebase";
 import { containsProfanity, MAX_MESSAGE_LENGTH } from "../engine/profanityFilter";
 
@@ -48,6 +54,10 @@ export function LifeSimSocial({ character, uid, onUpdateCharacter }: Props) {
   const [chatError, setChatError] = useState<string | null>(null);
   const lastSentAt = useRef(0);
   const marriedFromProposal = useRef<string | null>(null);
+  const [incomingTransfers, setIncomingTransfers] = useState<MoneyTransferDoc[]>([]);
+  const claimedTransferIds = useRef<Set<string>>(new Set());
+  const [sendTarget, setSendTarget] = useState<{ uid: string; name: string } | null>(null);
+  const [sendAmount, setSendAmount] = useState("");
 
   // Broadcast this player's own lifesim presence (character name + age)
   // so other players can see them in the nearby-players list.
@@ -67,6 +77,25 @@ export function LifeSimSocial({ character, uid, onUpdateCharacter }: Props) {
   useEffect(() => watchLifeSimPresence(uid, setNearbyPlayers), [uid]);
   useEffect(() => watchIncomingProposals(uid, setIncomingProposals), [uid]);
   useEffect(() => watchOutgoingProposals(uid, setOutgoingProposals), [uid]);
+  useEffect(() => watchIncomingTransfers(uid, setIncomingTransfers), [uid]);
+
+  // Credit each unclaimed transfer exactly once — claimedTransferIds guards
+  // against re-applying one between the moment we credit it locally and
+  // the moment claimMoneyTransfer's write is actually confirmed back by
+  // the next snapshot (same race the marriage proposal effect below
+  // guards against with marriedFromProposal).
+  useEffect(() => {
+    const unclaimed = incomingTransfers.filter((t) => !claimedTransferIds.current.has(t.id));
+    if (unclaimed.length === 0) return;
+    let next = character;
+    for (const transfer of unclaimed) {
+      claimedTransferIds.current.add(transfer.id);
+      next = receiveMoney(next, transfer.amount, transfer.fromName);
+      void claimMoneyTransfer(transfer.id).catch(() => {});
+    }
+    onUpdateCharacter(next);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [incomingTransfers]);
 
   // The moment either side's own view of a proposal they're party to
   // flips to "accepted", marry locally and persist — independently of
@@ -112,6 +141,21 @@ export function LifeSimSocial({ character, uid, onUpdateCharacter }: Props) {
     setChatError(null);
   };
 
+  const openSend = (otherUid: string, otherName: string) => {
+    setSendTarget({ uid: otherUid, name: otherName });
+    setSendAmount("");
+  };
+
+  const handleSendMoney = () => {
+    if (!sendTarget) return;
+    const amount = Math.floor(Number(sendAmount));
+    if (!Number.isFinite(amount) || amount <= 0 || amount > character.stats.naira) return;
+    onUpdateCharacter(sendMoney(character, amount));
+    void sendMoneyTransfer(uid, character.name, sendTarget.uid, sendTarget.name, amount).catch(() => {});
+    setSendTarget(null);
+    setSendAmount("");
+  };
+
   const handleSend = () => {
     if (!activeChat) return;
     const text = chatInput.trim();
@@ -143,6 +187,41 @@ export function LifeSimSocial({ character, uid, onUpdateCharacter }: Props) {
   const handleReport = (otherUid: string, text: string) => {
     void reportMessage(uid, otherUid, chatIdFor(uid, otherUid), text).catch(() => {});
   };
+
+  if (sendTarget) {
+    return (
+      <div className="lifesim-send-money">
+        <div className="lifesim-chat__header">
+          <button className="icon-button" onClick={() => setSendTarget(null)} aria-label="Back">
+            ←
+          </button>
+          <span className="lifesim-chat__name">Send money to {sendTarget.name}</span>
+        </div>
+        <p className="lifesim-hint">You have ₦{character.stats.naira.toLocaleString()}.</p>
+        <input
+          className="lifesim-intro__input"
+          type="number"
+          min={1}
+          max={character.stats.naira}
+          value={sendAmount}
+          onChange={(e) => setSendAmount(e.target.value)}
+          placeholder="Amount in naira"
+        />
+        <button
+          className="choice-button choice-button--primary"
+          disabled={
+            !sendAmount ||
+            !Number.isFinite(Number(sendAmount)) ||
+            Number(sendAmount) <= 0 ||
+            Number(sendAmount) > character.stats.naira
+          }
+          onClick={handleSendMoney}
+        >
+          Send
+        </button>
+      </div>
+    );
+  }
 
   if (activeChat) {
     const visibleMessages = chatMessages.filter((m) => !blockedUids.includes(m.fromUid));
@@ -196,12 +275,20 @@ export function LifeSimSocial({ character, uid, onUpdateCharacter }: Props) {
       {character.spouseUid ? (
         <div className="lifesim-marriage__spouse">
           <p>💍 Married to {character.spouseName}</p>
-          <button
-            className="rpg-choice-pill"
-            onClick={() => openChat(character.spouseUid!, character.spouseName ?? "Spouse")}
-          >
-            Message {character.spouseName}
-          </button>
+          <div className="lifesim-marriage__player-actions">
+            <button
+              className="rpg-choice-pill"
+              onClick={() => openChat(character.spouseUid!, character.spouseName ?? "Spouse")}
+            >
+              Message {character.spouseName}
+            </button>
+            <button
+              className="rpg-choice-pill"
+              onClick={() => openSend(character.spouseUid!, character.spouseName ?? "Spouse")}
+            >
+              Send money
+            </button>
+          </div>
         </div>
       ) : (
         <>
@@ -240,6 +327,9 @@ export function LifeSimSocial({ character, uid, onUpdateCharacter }: Props) {
                     disabled={pendingOutgoingUids.has(p.uid)}
                   >
                     {pendingOutgoingUids.has(p.uid) ? "Proposed" : "Propose"}
+                  </button>
+                  <button className="rpg-choice-pill" onClick={() => openSend(p.uid, p.characterName)}>
+                    Send money
                   </button>
                 </div>
               </div>

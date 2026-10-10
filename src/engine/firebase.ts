@@ -261,6 +261,83 @@ export function watchOutgoingProposals(uid: string, callback: (proposals: Marria
   return watchProposalsWhere("fromUid", uid, callback);
 }
 
+// Player-to-player money gifts — "send money to help" per the design ask.
+// Unlike marriage, there's no accept/decline: the sender deducts their own
+// naira and persists it immediately (lifeSim.ts's sendMoney), writes this
+// doc, and the recipient's client watches for unclaimed transfers
+// addressed to their uid, credits their own naira locally
+// (lifeSim.ts's receiveMoney), and marks the transfer claimed — same
+// "neither side writes the other's save document" principle as marriage.
+export interface MoneyTransferDoc {
+  id: string;
+  fromUid: string;
+  fromName: string;
+  toUid: string;
+  toName: string;
+  amount: number;
+  claimed: boolean;
+  createdAt: number;
+}
+
+export async function sendMoneyTransfer(
+  fromUid: string,
+  fromName: string,
+  toUid: string,
+  toName: string,
+  amount: number,
+): Promise<void> {
+  if (!firebaseEnabled) return;
+  const { db, firestoreMod } = await loadFirebase();
+  await firestoreMod.addDoc(firestoreMod.collection(db, "moneyTransfers"), {
+    fromUid,
+    fromName,
+    toUid,
+    toName,
+    amount,
+    claimed: false,
+    createdAt: Date.now(),
+  });
+}
+
+export async function claimMoneyTransfer(transferId: string): Promise<void> {
+  if (!firebaseEnabled) return;
+  const { db, firestoreMod } = await loadFirebase();
+  await firestoreMod.updateDoc(firestoreMod.doc(db, "moneyTransfers", transferId), { claimed: true });
+}
+
+export function watchIncomingTransfers(
+  uid: string,
+  callback: (transfers: MoneyTransferDoc[]) => void,
+): () => void {
+  if (!firebaseEnabled) {
+    callback([]);
+    return () => {};
+  }
+  let unsubscribe: (() => void) | null = null;
+  let cancelled = false;
+  void loadFirebase().then(({ db, firestoreMod }) => {
+    if (cancelled) return;
+    const q = firestoreMod.query(
+      firestoreMod.collection(db, "moneyTransfers"),
+      firestoreMod.where("toUid", "==", uid),
+      firestoreMod.where("claimed", "==", false),
+    );
+    unsubscribe = firestoreMod.onSnapshot(
+      q,
+      (snap) => {
+        const transfers: MoneyTransferDoc[] = [];
+        snap.forEach((docSnap) => transfers.push({ id: docSnap.id, ...(docSnap.data() as Omit<MoneyTransferDoc, "id">) }));
+        callback(transfers);
+      },
+      () => callback([]),
+    );
+  });
+  return () => {
+    cancelled = true;
+    unsubscribe?.();
+  };
+}
+
 // Pairwise chat. chatId is a deterministic sort of the two uids so both
 // sides always land on the same chat document without a lookup step.
 export function chatIdFor(uidA: string, uidB: string): string {

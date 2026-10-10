@@ -1458,7 +1458,8 @@
   margin-bottom: 0.9rem;
 }
 
-.lifesim-chore {
+.lifesim-chore,
+.lifesim-school {
   border: 1px dashed var(--border);
   border-radius: 0.85rem;
   padding: 0.9rem 1rem;

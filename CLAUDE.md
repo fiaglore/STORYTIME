@@ -132,6 +132,20 @@ the single surviving mode, `src/ui/LifeSim.tsx`.
   `AGE_UP_REQUIREMENTS`, re-verify `worst-case hustle total >= hardest
   band's minEarn` still holds (there's a 50-trial regression test for
   this — keep it).
+- Ages 0 through `AGE_SCHOOL_CHOICE_CUTOFF` (10) get a one-time school
+  choice instead of the normal chores/events grind — `src/content/
+  schools.ts`'s `SCHOOLS`, gated by `schoolsAvailableTo(wealthTier)` (a
+  school's `minTier` must be at or below the character's own tier, same
+  "richer unlocks more" direction as every other wealth gate).
+  `chooseSchool` sets `LifeCharacter.schoolId` once and it's never
+  cleared; `ageUp` applies that school's `costPerYear`/`smartsPerYear`/
+  `happinessPerYear` every year through the cutoff, then stops (the field
+  stays set, just inert past that age). `LifeSim.tsx` shows the school
+  picker instead of chores/events whenever `age <= cutoff && !schoolId`.
+  Past the cutoff, a year gets `CHORES_PER_YEAR` (4) chores and up to
+  `EVENTS_PER_YEAR` (5) life events, each resolved one at a time via a
+  `pendingEvents` queue (same shape as `pendingChores`) before Age Up is
+  offered.
 - Age Up is deliberately semi-tedious: `src/content/chores.ts`'s `CHORES`
   is a pool of small daily tasks (distinct from `LIFE_EVENTS`, which have
   real branching choices and bigger stakes); `pickChores(character,

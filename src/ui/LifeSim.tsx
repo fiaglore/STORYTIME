@@ -6,6 +6,7 @@ import {
   bandForAge,
   buyItem,
   changeFaith,
+  chooseSchool,
   createCharacter,
   hustle,
   isChoiceAvailable,
@@ -21,6 +22,7 @@ import {
   treatInjury,
   MAX_PRAYERS_PER_YEAR,
   trainSkill,
+  AGE_SCHOOL_CHOICE_CUTOFF,
   AGE_UP_REQUIREMENTS,
   CRITICAL_HEALTH_THRESHOLD,
   JOBS,
@@ -35,6 +37,7 @@ import type { LifeEvent } from "../content/lifeEvents";
 import { pickChores, type Chore } from "../content/chores";
 import { SHOP_ITEMS, type ShopItem } from "../content/shop";
 import { SKILLS, SKILL_TRAIN_COST, type Skill } from "../content/skills";
+import { schoolsAvailableTo, type School } from "../content/schools";
 import {
   FAITHS,
   WEALTH_TIERS,
@@ -63,7 +66,15 @@ const INTERVIEW_BONUS: Record<InterviewResult, { naira?: number; happiness?: num
 // each year before Age Up is available — the deliberate, semi-tedious
 // daily-grind friction the design asks for. Age bands with no chores in
 // the pool (infancy) just get an empty list and Age Up stays immediate.
-const CHORES_PER_YEAR = 3;
+// Only applies past AGE_SCHOOL_CHOICE_CUTOFF — younger ages get the
+// school-choice screen instead (see handleAgeUp).
+const CHORES_PER_YEAR = 4;
+
+// How many life events (content/lifeEvents.ts) fire per year, past the
+// school-choice age window — each resolved one at a time via pendingEvents,
+// same queue shape as pendingChores. pickEvent's own repeat-once-exhausted
+// fallback means a short age-band pool can still fill this every year.
+const EVENTS_PER_YEAR = 5;
 
 function formatNaira(amount: number): string {
   const sign = amount > 0 ? "+" : amount < 0 ? "-" : "";
@@ -102,8 +113,6 @@ const STAT_LABELS: { key: keyof LifeCharacter["stats"]; label: string; isNaira?:
   { key: "looks", label: "Looks" },
 ];
 
-const EVENT_CHANCE = 0.75;
-
 type CreationStep = "name" | "dob" | "faith" | "questions" | "reveal";
 
 export function LifeSim({ onExit }: Props) {
@@ -117,7 +126,7 @@ export function LifeSim({ onExit }: Props) {
   const [reveal, setReveal] = useState<{ tier: ReturnType<typeof rollWealthTier>["tier"]; inheritance: number } | null>(
     null,
   );
-  const [activeEvent, setActiveEvent] = useState<LifeEvent | null>(null);
+  const [pendingEvents, setPendingEvents] = useState<LifeEvent[]>([]);
   const [showJobs, setShowJobs] = useState(false);
   const [showShop, setShowShop] = useState(false);
   const [showSkills, setShowSkills] = useState(false);
@@ -129,7 +138,7 @@ export function LifeSim({ onExit }: Props) {
   // which is fine for low-stakes busywork like this.
   const [pendingChores, setPendingChores] = useState<Chore[]>(() => {
     const saved = loadSaved();
-    return saved && saved.alive ? pickChores(saved, CHORES_PER_YEAR) : [];
+    return saved && saved.alive && saved.age > AGE_SCHOOL_CHOICE_CUTOFF ? pickChores(saved, CHORES_PER_YEAR) : [];
   });
   const uid = useAuthStore((s) => s.user?.uid);
   const pulledForUid = useRef<string | null>(null);
@@ -173,8 +182,9 @@ export function LifeSim({ onExit }: Props) {
       inheritance: reveal.inheritance,
     });
     setCharacter(next);
-    setActiveEvent(null);
-    setPendingChores(pickChores(next, CHORES_PER_YEAR));
+    setPendingEvents([]);
+    // Age 0 is always within the school-choice window — no chores yet.
+    setPendingChores([]);
   };
 
   const handleChoreChallengeComplete = (chore: Chore, passed: boolean) => {
@@ -210,27 +220,38 @@ export function LifeSim({ onExit }: Props) {
     if (
       !character ||
       !character.alive ||
-      activeEvent ||
+      pendingEvents.length > 0 ||
       pendingJob ||
       pendingChores.length > 0 ||
+      (character.age <= AGE_SCHOOL_CHOICE_CUTOFF && !character.schoolId) ||
       !meetsAgeUpRequirements(character)
     )
       return;
     const aged = ageUp(character);
     setCharacter(aged);
-    if (aged.alive) {
+    // Ages through AGE_SCHOOL_CHOICE_CUTOFF get the school-choice screen
+    // instead of the normal chores/events grind — see the render logic
+    // below for where that screen is shown.
+    if (aged.alive && aged.age > AGE_SCHOOL_CHOICE_CUTOFF) {
       setPendingChores(pickChores(aged, CHORES_PER_YEAR));
-      if (Math.random() < EVENT_CHANCE) {
+      const events: LifeEvent[] = [];
+      for (let i = 0; i < EVENTS_PER_YEAR; i++) {
         const event = pickEvent(aged);
-        if (event) setActiveEvent(event);
+        if (event) events.push(event);
       }
+      setPendingEvents(events);
     }
   };
 
   const handleChoice = (index: number) => {
-    if (!character || !activeEvent) return;
-    setCharacter(resolveEvent(character, activeEvent, index));
-    setActiveEvent(null);
+    if (!character || pendingEvents.length === 0) return;
+    setCharacter(resolveEvent(character, pendingEvents[0], index));
+    setPendingEvents((es) => es.slice(1));
+  };
+
+  const handleChooseSchool = (school: School) => {
+    if (!character) return;
+    setCharacter(chooseSchool(character, school));
   };
 
   const handleJobPick = (job: JobId) => {
@@ -265,6 +286,7 @@ export function LifeSim({ onExit }: Props) {
     setAnswerScores([]);
     setReveal(null);
     setPendingChores([]);
+    setPendingEvents([]);
     setShowJobs(false);
     setShowShop(false);
     setShowSkills(false);
@@ -703,11 +725,27 @@ export function LifeSim({ onExit }: Props) {
         ))}
       </div>
 
-      {activeEvent ? (
+      {character.age <= AGE_SCHOOL_CHOICE_CUTOFF && !character.schoolId ? (
+        <div className="lifesim-school">
+          <p className="lifesim-chore__counter">Choose a school</p>
+          <p className="lifesim-hint">
+            Which school {character.name} attends depends on what the family can afford.
+          </p>
+          {schoolsAvailableTo(character.wealthTier).map((school) => (
+            <button key={school.id} className="rpg-choice-pill" onClick={() => handleChooseSchool(school)}>
+              {school.name}
+              {school.costPerYear > 0 ? ` — ₦${school.costPerYear.toLocaleString()}/yr` : " — free"}
+            </button>
+          ))}
+        </div>
+      ) : pendingEvents.length > 0 ? (
         <div className="lifesim-event">
-          <p className="lifesim-event__prompt">{activeEvent.prompt}</p>
+          <p className="lifesim-chore__counter">
+            Before you can age up — {pendingEvents.length} more thing{pendingEvents.length > 1 ? "s" : ""} happening
+          </p>
+          <p className="lifesim-event__prompt">{pendingEvents[0].prompt}</p>
           <div className="story-screen__choices">
-            {activeEvent.choices.map((choice, i) => {
+            {pendingEvents[0].choices.map((choice, i) => {
               // Choices gated behind an asset you don't own yet or naira
               // you haven't saved up just aren't offered — see
               // isChoiceAvailable / lifeEvents.ts's requiresAsset and

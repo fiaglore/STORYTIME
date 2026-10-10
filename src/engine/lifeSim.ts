@@ -12,6 +12,7 @@ import { SKILLS, type Skill } from "../content/skills";
 import type { ShopItem } from "../content/shop";
 import { WEALTH_TIERS, type FaithId, type WealthTierId } from "../content/characterCreation";
 import { PRAYER_FLAVORS, randomFlavor } from "../content/prayers";
+import { SCHOOLS, schoolsAvailableTo, type School } from "../content/schools";
 
 export type { AssetId };
 export { bandForAge };
@@ -116,6 +117,14 @@ export interface LifeCharacter {
   // sendMoney call rather than on ageUp, so it stays correct even across
   // several transfers within the same year.
   sentTransfers: { age: number; amount: number }[];
+  // Set once, during the ages-0-10 school-choice window (see
+  // AGE_SCHOOL_CHOICE_CUTOFF, chooseSchool, schoolsAvailableTo in
+  // content/schools.ts) — null until chosen. ageUp applies the chosen
+  // school's ongoing cost/smarts/happiness every year through that
+  // window; it's never un-set, so the choice (and its cost) keeps
+  // applying for the rest of childhood even if the family's wealth tier
+  // wouldn't newly qualify for it today.
+  schoolId: string | null;
 }
 
 export interface LifeStage {
@@ -222,6 +231,23 @@ export function createCharacter(opts: CreateCharacterOptions): LifeCharacter {
     prayersThisYear: 0,
     choreSkills: { labor: 0, errands: 0, finance: 0 },
     sentTransfers: [],
+    schoolId: null,
+  };
+}
+
+// The age range that gets the school-choice screen instead of the normal
+// chores/events flow — "infancy - 10 years old" per the design ask.
+export const AGE_SCHOOL_CHOICE_CUTOFF = 10;
+
+// Refuses (rather than throws) a school the character's wealth tier can't
+// reach, same pattern as every other gated mutator — see
+// schoolsAvailableTo in content/schools.ts.
+export function chooseSchool(character: LifeCharacter, school: School): LifeCharacter {
+  if (!schoolsAvailableTo(character.wealthTier).some((s) => s.id === school.id)) return character;
+  return {
+    ...character,
+    schoolId: school.id,
+    log: [...character.log, `Age ${character.age}: Enrolled at ${school.name}.`],
   };
 }
 
@@ -311,11 +337,28 @@ export function ageUp(character: LifeCharacter): LifeCharacter {
   if (!character.alive) return character;
   const nextAge = character.age + 1;
   const income = jobIncome(character.job);
+  const school = character.schoolId ? SCHOOLS.find((s) => s.id === character.schoolId) : undefined;
+  // School costs/benefits only apply through the school-choice age window —
+  // schoolId itself is never cleared (see its doc comment), but a
+  // character who's aged out of the window stops paying/benefiting.
+  const schoolDelta =
+    school && nextAge <= AGE_SCHOOL_CHOICE_CUTOFF
+      ? { naira: -school.costPerYear, smarts: school.smartsPerYear, happiness: school.happinessPerYear }
+      : {};
+  const prevNaira = character.stats.naira;
   const stats = applyDelta(character.stats, {
     health: randomInt(-2, 1) - Math.max(0, Math.floor((nextAge - 60) / 10)),
-    happiness: randomInt(-1, 1),
-    naira: income,
+    happiness: randomInt(-1, 1) + (schoolDelta.happiness ?? 0),
+    naira: income + (schoolDelta.naira ?? 0),
+    smarts: schoolDelta.smarts ?? 0,
   });
+
+  // The school fee (if any) is this year's first spend, same as job
+  // income is this year's first earning — trackNaira against a
+  // pre-school-fee baseline of (prevNaira + income) so a nonzero fee
+  // counts toward spentThisYear exactly like any other naira-moving
+  // action does.
+  const { spentThisYear } = trackNaira({ earnedThisYear: 0, spentThisYear: 0 }, prevNaira + income, stats.naira);
 
   const next: LifeCharacter = {
     ...character,
@@ -323,7 +366,7 @@ export function ageUp(character: LifeCharacter): LifeCharacter {
     stats,
     streak: nextStreak(character.streak, stats.health),
     earnedThisYear: income > 0 ? income : 0,
-    spentThisYear: 0,
+    spentThisYear,
     hustlesThisYear: 0,
     prayersThisYear: 0,
   };

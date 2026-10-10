@@ -7,6 +7,7 @@ import {
   buyItem,
   changeFaith,
   checkDeath,
+  chooseSchool,
   createCharacter,
   hustle,
   isChoiceAvailable,
@@ -24,6 +25,7 @@ import {
   treatInjury,
   trainSkill,
   unblockPlayer,
+  AGE_SCHOOL_CHOICE_CUTOFF,
   AGE_UP_REQUIREMENTS,
   MAX_HUSTLES_PER_YEAR,
   MAX_PRAYERS_PER_YEAR,
@@ -31,6 +33,7 @@ import {
   TREATMENT_COST,
   type LifeCharacter,
 } from "../src/engine/lifeSim";
+import { SCHOOLS } from "../src/content/schools";
 import { WEALTH_TIERS } from "../src/content/characterCreation";
 import { LIFE_EVENTS, bandForAge } from "../src/content/lifeEvents";
 import { CHORES, pickChores } from "../src/content/chores";
@@ -63,6 +66,7 @@ function baseCharacter(overrides: Partial<LifeCharacter> = {}): LifeCharacter {
     prayersThisYear: 0,
     choreSkills: { labor: 0, errands: 0, finance: 0 },
     sentTransfers: [],
+    schoolId: null,
     ...overrides,
   };
 }
@@ -671,6 +675,44 @@ describe("pray", () => {
     const c = baseCharacter({ faith: "muslim" });
     const result = pray(c);
     expect(result.character.log.at(-1)).toContain(result.flavorText);
+  });
+});
+
+describe("chooseSchool / school effects in ageUp", () => {
+  it("refuses a school the character's wealth tier can't reach", () => {
+    const c = baseCharacter({ wealthTier: "shepeteri" });
+    const elite = SCHOOLS.find((s) => s.id === "international-school")!;
+    expect(chooseSchool(c, elite)).toBe(c);
+  });
+
+  it("accepts a school within the character's wealth tier", () => {
+    const c = baseCharacter({ wealthTier: "stupendously-rich" });
+    const elite = SCHOOLS.find((s) => s.id === "international-school")!;
+    const next = chooseSchool(c, elite);
+    expect(next.schoolId).toBe(elite.id);
+  });
+
+  it("ageUp applies the chosen school's cost and smarts gain while within the age window", () => {
+    const school = SCHOOLS.find((s) => s.id === "community-private")!;
+    const c = baseCharacter({
+      age: 4,
+      schoolId: school.id,
+      stats: { happiness: 50, health: 50, smarts: 50, looks: 50, naira: 500_000 },
+    });
+    const next = ageUp(c);
+    expect(next.stats.naira).toBeLessThanOrEqual(500_000 - school.costPerYear);
+    expect(next.stats.smarts).toBeGreaterThanOrEqual(50 + school.smartsPerYear - 1); // allow natural drift
+  });
+
+  it("stops applying school cost/benefit once past the school-choice age window", () => {
+    const school = SCHOOLS.find((s) => s.id === "community-private")!;
+    const c = baseCharacter({
+      age: AGE_SCHOOL_CHOICE_CUTOFF,
+      schoolId: school.id,
+      stats: { happiness: 50, health: 50, smarts: 50, looks: 50, naira: 500_000 },
+    });
+    const next = ageUp(c); // crosses past the cutoff
+    expect(next.stats.naira).toBeGreaterThan(500_000 - school.costPerYear);
   });
 });
 

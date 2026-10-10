@@ -61,6 +61,7 @@ import { AccountSection } from "./AccountSection";
 import { latestDelta, useStatDeltas } from "./useStatDeltas";
 import { JobInterviewGame, type InterviewResult } from "./JobInterviewGame";
 import { LifeSimSocial } from "./LifeSimSocial";
+import { useLifeSimSocial, MIN_SOCIAL_AGE } from "./useLifeSimSocial";
 import { ChoreChallenge } from "./ChoreChallenge";
 import { Settings } from "./Settings";
 
@@ -223,6 +224,11 @@ export function LifeSim({ onExit }: Props) {
   const authEnabled = useAuthStore((s) => s.enabled);
   const authStatus = useAuthStore((s) => s.status);
   const authInit = useAuthStore((s) => s.init);
+  // Runs continuously (presence, proposal, and money-transfer listeners,
+  // plus the auto-marry/auto-credit effects they drive) whenever a
+  // signed-in adult character exists — not just while the Marriage tab
+  // is open. See useLifeSimSocial.ts for the two real bugs that fixed.
+  const social = useLifeSimSocial(uid, character, setCharacter);
 
   useEffect(() => {
     authInit();
@@ -782,7 +788,7 @@ export function LifeSim({ onExit }: Props) {
             Classroom
           </button>
         )}
-        {uid && character.age >= 18 && (
+        {uid && character.age >= MIN_SOCIAL_AGE && (
           <button
             className={`lifesim-tab ${showMarriage ? "lifesim-tab--active" : ""}`}
             onClick={() => {
@@ -912,7 +918,14 @@ export function LifeSim({ onExit }: Props) {
       )}
 
       {showMarriage && uid && (
-        <LifeSimSocial character={character} uid={uid} onUpdateCharacter={setCharacter} />
+        <LifeSimSocial
+          character={character}
+          uid={uid}
+          onUpdateCharacter={setCharacter}
+          nearbyPlayers={social.nearbyPlayers}
+          incomingProposals={social.incomingProposals}
+          outgoingProposals={social.outgoingProposals}
+        />
       )}
 
       {showClassroom && (

@@ -1,41 +1,26 @@
 import { useEffect, useRef, useState } from "react";
-import {
-  blockPlayer,
-  marry,
-  maxSendable,
-  receiveMoney,
-  sendMoney,
-  type LifeCharacter,
-} from "../engine/lifeSim";
+import { blockPlayer, maxSendable, sendMoney, type LifeCharacter } from "../engine/lifeSim";
 import {
   chatIdFor,
-  claimMoneyTransfer,
-  clearLifeSimPresence,
   proposeMarriage,
   reportMessage,
   respondToProposal,
   sendChatMessage,
   sendMoneyTransfer,
   watchChatMessages,
-  watchIncomingProposals,
-  watchIncomingTransfers,
-  watchLifeSimPresence,
-  watchOutgoingProposals,
-  writeLifeSimPresence,
   type ChatMessageDoc,
   type LifeSimPresenceDoc,
   type MarriageProposalDoc,
-  type MoneyTransferDoc,
 } from "../engine/firebase";
 import { containsProfanity, MAX_MESSAGE_LENGTH } from "../engine/profanityFilter";
+import type { LifeSimSocialState } from "./useLifeSimSocial";
 
-interface Props {
+interface Props extends LifeSimSocialState {
   character: LifeCharacter;
   uid: string;
   onUpdateCharacter: (next: LifeCharacter) => void;
 }
 
-const PRESENCE_INTERVAL_MS = 10_000;
 const CHAT_RATE_LIMIT_MS = 2_000;
 
 // Real player-to-player marriage and free-text chat for Lagos Life, split
@@ -45,99 +30,30 @@ const CHAT_RATE_LIMIT_MS = 2_000;
 // "Chat" sections for the full design: why neither side writes the
 // other's save document, the chatId convention, and the four safety
 // rails (profanity filter, rate limit, block, report).
-export function LifeSimSocial({ character, uid, onUpdateCharacter }: Props) {
-  const [nearbyPlayers, setNearbyPlayers] = useState<LifeSimPresenceDoc[]>([]);
-  const [incomingProposals, setIncomingProposals] = useState<MarriageProposalDoc[]>([]);
-  const [outgoingProposals, setOutgoingProposals] = useState<MarriageProposalDoc[]>([]);
+//
+// nearbyPlayers/incomingProposals/outgoingProposals come in as props from
+// useLifeSimSocial, which LifeSim.tsx runs continuously — this component
+// used to own those subscriptions (plus presence broadcasting and the
+// auto-marry/auto-credit effects) itself, which meant all of it only ran
+// while this specific tab was mounted; see useLifeSimSocial.ts's comment
+// for the two real bugs that caused. What's left here is genuinely
+// tab-scoped (the open chat thread, the send-money form) plus the
+// user-initiated action handlers.
+export function LifeSimSocial({
+  character,
+  uid,
+  onUpdateCharacter,
+  nearbyPlayers,
+  incomingProposals,
+  outgoingProposals,
+}: Props) {
   const [activeChat, setActiveChat] = useState<{ uid: string; name: string } | null>(null);
   const [chatMessages, setChatMessages] = useState<ChatMessageDoc[]>([]);
   const [chatInput, setChatInput] = useState("");
   const [chatError, setChatError] = useState<string | null>(null);
   const lastSentAt = useRef(0);
-  const marriedFromProposal = useRef<string | null>(null);
-  const [incomingTransfers, setIncomingTransfers] = useState<MoneyTransferDoc[]>([]);
-  const claimedTransferIds = useRef<Set<string>>(new Set());
   const [sendTarget, setSendTarget] = useState<{ uid: string; name: string } | null>(null);
   const [sendAmount, setSendAmount] = useState("");
-
-  // Broadcast this player's own lifesim presence (character name + age)
-  // so other players can see them in the nearby-players list.
-  useEffect(() => {
-    if (!character.alive) return;
-    const broadcast = () =>
-      void writeLifeSimPresence(uid, { characterName: character.name, age: character.age }).catch(() => {});
-    broadcast();
-    const interval = window.setInterval(broadcast, PRESENCE_INTERVAL_MS);
-    return () => window.clearInterval(interval);
-  }, [uid, character.name, character.age, character.alive]);
-
-  useEffect(() => {
-    return () => void clearLifeSimPresence(uid).catch(() => {});
-  }, [uid]);
-
-  useEffect(() => watchLifeSimPresence(uid, setNearbyPlayers), [uid]);
-  useEffect(() => watchIncomingProposals(uid, setIncomingProposals), [uid]);
-  useEffect(() => watchOutgoingProposals(uid, setOutgoingProposals), [uid]);
-  useEffect(() => watchIncomingTransfers(uid, setIncomingTransfers), [uid]);
-
-  // Claim first, credit only on a won claim — claimMoneyTransfer is now an
-  // atomic Firestore transaction that flips claimed only if it's still
-  // false and reports whether this call was the one that did it (see
-  // firebase.ts). Crediting used to run ahead of that confirmation
-  // (apply receiveMoney locally, then fire off claimMoneyTransfer without
-  // waiting), which could double-credit the same transfer: two signed-in
-  // tabs/devices both watching it, or a reload landing between the local
-  // credit and claimMoneyTransfer's write actually confirming — this was
-  // a real bug. claimedTransferIds still guards against this effect
-  // re-entering the same transfer while a claim for it is already in
-  // flight (a new snapshot can arrive mid-await); a transfer whose claim
-  // attempt throws (offline, etc.) is un-marked so a later snapshot
-  // retries it, but one that resolves false (genuinely already claimed
-  // elsewhere) is never retried or credited.
-  useEffect(() => {
-    const unclaimed = incomingTransfers.filter((t) => !claimedTransferIds.current.has(t.id));
-    if (unclaimed.length === 0) return;
-    let cancelled = false;
-    void (async () => {
-      let next = character;
-      for (const transfer of unclaimed) {
-        if (cancelled) return;
-        claimedTransferIds.current.add(transfer.id);
-        let won: boolean;
-        try {
-          won = await claimMoneyTransfer(transfer.id);
-        } catch {
-          claimedTransferIds.current.delete(transfer.id);
-          continue;
-        }
-        if (!won || cancelled) continue;
-        next = receiveMoney(next, transfer.amount, transfer.fromName);
-        onUpdateCharacter(next);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [incomingTransfers]);
-
-  // The moment either side's own view of a proposal they're party to
-  // flips to "accepted", marry locally and persist — independently of
-  // whichever client actually clicked Accept. marriedFromProposal guards
-  // against re-running this for the same proposal after spouseUid is set
-  // (character.spouseUid itself isn't enough of a guard inside this
-  // effect's closure across the single render where both update).
-  useEffect(() => {
-    if (character.spouseUid) return;
-    const accepted = [...incomingProposals, ...outgoingProposals].find(
-      (p) => p.status === "accepted" && p.id !== marriedFromProposal.current,
-    );
-    if (!accepted) return;
-    marriedFromProposal.current = accepted.id;
-    const spouseUid = accepted.fromUid === uid ? accepted.toUid : accepted.fromUid;
-    const spouseName = accepted.fromUid === uid ? accepted.toName : accepted.fromName;
-    onUpdateCharacter(marry(character, spouseUid, spouseName));
-  }, [incomingProposals, outgoingProposals, character, uid, onUpdateCharacter]);
 
   // No reset-to-[] when activeChat closes: the render below only reads
   // chatMessages while activeChat is truthy, and re-subscribing on the

@@ -374,23 +374,45 @@ note in Lagos Life's intro screen).
   field is first read. Bump `SAVE_VERSION` and add a default to
   `CHARACTER_FIELD_DEFAULTS` whenever `LifeCharacter` gains a field.
 - **Marriage** (`src/ui/LifeSimSocial.tsx`, the "Marriage" tab in
-  `LifeSim.tsx`, shown once signed in and age >= 18): real player-to-player,
-  not an NPC. `lifesimPresence/{uid}` (character name + age) drives the
-  "nearby players" list; `marriageProposals/{id}` holds the propose/accept/
-  decline flow. Neither side ever writes the other's `users/{uid}` save
-  document — instead, once a proposal's `status` flips to `"accepted"`,
-  **both** clients independently observe that (their own
-  `watchIncomingProposals`/`watchOutgoingProposals` subscription sees it)
-  and call `marry()` on their own character, persisting it themselves.
-  This is why `marry()` is a plain local/pure function in `lifeSim.ts` with
-  no Firestore call in it. `firestore.rules`' `marriageProposals` update
-  rule only lets `toUid` change `status`, only from `pending` to
-  `accepted`/`declined`, and pins every other field — the sender used to
-  also be allowed to update the doc, meaning a sender could accept their
-  own proposal and force a marriage the other side never agreed to; that
-  was a real bug. `firestore.rules` needs its own
+  `LifeSim.tsx`, shown once signed in and age >= `MIN_SOCIAL_AGE` (18)):
+  real player-to-player, not an NPC. `lifesimPresence/{uid}` (character
+  name + age) drives the "nearby players" list; `marriageProposals/{id}`
+  holds the propose/accept/decline flow. Neither side ever writes the
+  other's `users/{uid}` save document — instead, once a proposal's
+  `status` flips to `"accepted"`, **both** clients independently observe
+  that and call `marry()` on their own character, persisting it
+  themselves. This is why `marry()` is a plain local/pure function in
+  `lifeSim.ts` with no Firestore call in it. `firestore.rules`'
+  `marriageProposals` update rule only lets `toUid` change `status`, only
+  from `pending` to `accepted`/`declined`, and pins every other field —
+  the sender used to also be allowed to update the doc, meaning a sender
+  could accept their own proposal and force a marriage the other side
+  never agreed to; that was a real bug. `firestore.rules` needs its own
   `lifesimPresence/{uid}` and `marriageProposals/{id}` blocks (already in
   the repo's copy, needs publishing same as every other collection here).
+  **All of the above is driven by `src/ui/useLifeSimSocial.ts`, a hook
+  `LifeSim.tsx` runs continuously whenever a signed-in, alive,
+  `MIN_SOCIAL_AGE`-or-older character exists** — presence broadcast +
+  watch, the incoming/outgoing proposal watches, the money-transfer watch
+  (see "Send money" below), and the two effects that act on those without
+  a click from this player (auto-marry on an accepted proposal, auto-
+  credit on a claimed transfer). This used to all live inside
+  `LifeSimSocial.tsx` itself, meaning none of it ran unless the Marriage
+  tab happened to be mounted — two real bugs: (1) a proposal accepted, or
+  money sent, while this player had any other tab open sat unprocessed
+  until they next opened Marriage; (2) presence itself only existed while
+  that one panel was mounted, so two players who were both genuinely
+  online wouldn't see each other in the nearby-players list unless both
+  happened to have Marriage open at the same moment — "see other
+  players" was far emptier than the real concurrent player count would
+  suggest. `LifeSimSocial.tsx` now only owns what's genuinely tab-scoped
+  (the open chat thread, the send-money form) plus the user-initiated
+  action handlers, reading `nearbyPlayers`/`incomingProposals`/
+  `outgoingProposals` from `useLifeSimSocial`'s return value as props.
+  Verified with a two-browser-context Playwright pass against the real
+  built app where the recipient *never once opens the Marriage tab* —
+  confirming they still show up in the sender's nearby-players list and
+  still get credited automatically in the background.
 - **Send money** (same `LifeSimSocial.tsx`, a "Send money" button next to
   a nearby player or the spouse): "send money to each other to help" per
   the design ask, capped at `SEND_CAP_FRACTION` (20%) of current naira per

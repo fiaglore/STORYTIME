@@ -14,6 +14,7 @@ import {
   marry,
   meetsAgeUpRequirements,
   maxSendable,
+  migrateCharacter,
   pickChoreGameVariant,
   pray,
   receiveMoney,
@@ -32,6 +33,7 @@ import {
   MAX_HUSTLES_PER_YEAR,
   MAX_PRAYERS_PER_YEAR,
   REVIVE_COST,
+  SAVE_VERSION,
   TREATMENT_COST,
   type LifeCharacter,
 } from "../src/engine/lifeSim";
@@ -737,6 +739,58 @@ describe("pray", () => {
     const c = baseCharacter({ faith: "muslim" });
     const result = pray(c);
     expect(result.character.log.at(-1)).toContain(result.flavorText);
+  });
+});
+
+describe("migrateCharacter", () => {
+  it("returns null for garbage/unrelated JSON rather than crashing", () => {
+    expect(migrateCharacter(null)).toBeNull();
+    expect(migrateCharacter(undefined)).toBeNull();
+    expect(migrateCharacter("just a string")).toBeNull();
+    expect(migrateCharacter(42)).toBeNull();
+    expect(migrateCharacter({ foo: "bar" })).toBeNull();
+  });
+
+  it("passes a current-shape character through unchanged", () => {
+    const c = baseCharacter();
+    const migrated = migrateCharacter(c);
+    expect(migrated).not.toBeNull();
+    expect(migrated!.choreGameHistory).toEqual(c.choreGameHistory);
+    expect(migrated!.name).toBe(c.name);
+  });
+
+  it("backfills fields missing from an old save shape instead of leaving them undefined", () => {
+    const old = baseCharacter();
+    // Simulate an old save predating choreGameHistory/sentTransfers/schoolId.
+    const stripped = { ...old } as Record<string, unknown>;
+    delete stripped.choreGameHistory;
+    delete stripped.sentTransfers;
+    delete stripped.schoolId;
+    delete stripped.prayersThisYear;
+    delete stripped.choreSkills;
+    const migrated = migrateCharacter(stripped);
+    expect(migrated).not.toBeNull();
+    expect(migrated!.choreGameHistory).toEqual({});
+    expect(migrated!.sentTransfers).toEqual([]);
+    expect(migrated!.schoolId).toBeNull();
+    expect(migrated!.prayersThisYear).toBe(0);
+    expect(migrated!.choreSkills).toEqual({ labor: 0, errands: 0, finance: 0 });
+  });
+
+  it("unwraps a {version, character} save file too", () => {
+    const old = baseCharacter({ name: "Wrapped" });
+    const migrated = migrateCharacter({ version: SAVE_VERSION, character: old });
+    expect(migrated).not.toBeNull();
+    expect(migrated!.name).toBe("Wrapped");
+  });
+
+  it("a migrated character never crashes pickChoreGameVariant (the original symptom)", () => {
+    const old = baseCharacter();
+    const stripped = { ...old } as Record<string, unknown>;
+    delete stripped.choreGameHistory;
+    const migrated = migrateCharacter(stripped)!;
+    const chore = CHORES[0];
+    expect(() => pickChoreGameVariant(migrated, chore)).not.toThrow();
   });
 });
 

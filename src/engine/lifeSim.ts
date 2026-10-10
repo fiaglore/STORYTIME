@@ -829,3 +829,67 @@ export function changeFaith(character: LifeCharacter, faith: FaithId): LifeChara
   if (character.faith === faith) return character;
   return { ...character, faith };
 }
+
+// Current shape of a persisted save (localStorage and Firestore's
+// users/{uid}.lifeSim both store this). Bump this whenever LifeCharacter
+// gains a field that migrateCharacter needs a default for — the version
+// number itself isn't branched on anywhere, it's just there for the day a
+// real structural migration (not just "fill in a missing field") is
+// needed and something has to tell saves apart.
+export const SAVE_VERSION = 1;
+
+export interface SaveFile {
+  version: number;
+  character: LifeCharacter;
+}
+
+// Defaults for every field LifeCharacter has gained since the earliest
+// saves (back when it was just name/age/job/stats/alive/...) — an old
+// save loaded straight as `as LifeCharacter` is missing these, and code
+// that reads them (pickChoreGameVariant reading choreGameHistory,
+// sendMoney reading sentTransfers, ...) throws on `undefined`. This was a
+// real bug: loadSaved did a bare JSON.parse with no version check or
+// migration at all.
+const CHARACTER_FIELD_DEFAULTS = {
+  blockedUids: [] as string[],
+  prayersThisYear: 0,
+  choreSkills: { labor: 0, errands: 0, finance: 0 } as Record<ChoreCategory, number>,
+  choreGameHistory: {} as Record<string, { variant: ChoreGameVariant; age: number }>,
+  sentTransfers: [] as { age: number; amount: number }[],
+  schoolId: null as string | null,
+  birthDate: "" as string,
+  faith: "other" as FaithId,
+  wealthTier: "middle-class" as WealthTierId,
+  inheritance: 0,
+};
+
+// Takes whatever was actually in storage — a bare old-shape character
+// object, a current-shape one, or a {version, character} wrapper — and
+// returns a LifeCharacter with every field present, or null if the input
+// isn't recognizable as a character at all (corrupt/unrelated JSON), so
+// the caller can fall back to "no save" instead of crashing later deep in
+// the engine. Pure and defensive on purpose: every field here needs a
+// safe default a player would never notice as "wrong", not just whatever
+// makes TypeScript happy.
+export function migrateCharacter(raw: unknown): LifeCharacter | null {
+  if (!raw || typeof raw !== "object") return null;
+  const maybeWrapped = raw as Partial<SaveFile>;
+  const candidate =
+    "character" in maybeWrapped && maybeWrapped.character && typeof maybeWrapped.character === "object"
+      ? maybeWrapped.character
+      : raw;
+  const obj = candidate as Partial<LifeCharacter>;
+  if (typeof obj.name !== "string" || typeof obj.age !== "number" || typeof obj.alive !== "boolean") {
+    return null;
+  }
+  return {
+    ...CHARACTER_FIELD_DEFAULTS,
+    ...obj,
+    stats: obj.stats ?? { happiness: 50, health: 50, smarts: 50, looks: 50, naira: 0 },
+    skills: obj.skills ?? {},
+    assets: obj.assets ?? [],
+    inventory: obj.inventory ?? [],
+    seenEventIds: obj.seenEventIds ?? [],
+    log: obj.log ?? [],
+  } as LifeCharacter;
+}

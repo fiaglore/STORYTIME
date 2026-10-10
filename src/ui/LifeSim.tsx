@@ -12,6 +12,7 @@ import {
   isChoiceAvailable,
   lifeStageForAge,
   meetsAgeUpRequirements,
+  migrateCharacter,
   pray,
   rollYearWork,
   pickChoreGameVariant,
@@ -30,6 +31,7 @@ import {
   JOBS,
   MAX_HUSTLES_PER_YEAR,
   REVIVE_COST,
+  SAVE_VERSION,
   TREATMENT_COST,
   type LifeCharacter,
   type JobId,
@@ -85,23 +87,73 @@ interface Props {
 
 const SAVE_KEY = "storytime-lagos:lifesim";
 
-function loadSaved(): LifeCharacter | null {
+interface SavedBundle {
+  character: LifeCharacter;
+  pendingChores: Chore[];
+  pendingEvents: LifeEvent[];
+}
+
+// migrateCharacter fills in any field an older save shape is missing
+// (and returns null for anything that isn't recognizable as a character
+// at all) — a bare `JSON.parse(raw) as LifeCharacter` used to let an old
+// save missing a newer field (e.g. choreGameHistory, added after some
+// saves already existed) through untouched, and the game would crash
+// later wherever that field was read. This was a real bug.
+//
+// The pending chores/events queue is persisted alongside the character —
+// both locally and in the cloud save (same shape, see persist/
+// handleCloudPull) — rather than just rerolled fresh on every load, so a
+// reload (or a cloud pull, e.g. Firebase auth surviving a reload and
+// re-triggering the sign-in sync effect) can't be used to dodge a bad
+// year's worth of events/chores by never resolving them. That was also a
+// real bug — including a version of it where a *correctly* locally-
+// persisted queue got clobbered by the cloud-sync effect re-rolling a
+// fresh one, because the cloud payload didn't carry pending work yet.
+// Used for both the localStorage blob and the Firestore lifeSim field,
+// which share this exact shape. An old save (or one missing just one of
+// the two arrays) rerolls both together via rollYearWork rather than
+// leaving one stale and one fresh.
+function unwrapSavedBundle(raw: unknown): SavedBundle | null {
+  if (!raw || typeof raw !== "object") return null;
+  const parsed = raw as { character?: unknown; pendingChores?: unknown; pendingEvents?: unknown };
+  const character = migrateCharacter("character" in parsed ? parsed.character : raw);
+  if (!character) return null;
+  const hasPendingChores = Array.isArray(parsed.pendingChores);
+  const hasPendingEvents = Array.isArray(parsed.pendingEvents);
+  if (hasPendingChores && hasPendingEvents) {
+    return {
+      character,
+      pendingChores: parsed.pendingChores as Chore[],
+      pendingEvents: parsed.pendingEvents as LifeEvent[],
+    };
+  }
+  const rolled = character.alive ? rollYearWork(character) : { chores: [], events: [] };
+  return { character, pendingChores: rolled.chores, pendingEvents: rolled.events };
+}
+
+function loadSavedBundle(): SavedBundle | null {
   try {
     const raw = localStorage.getItem(SAVE_KEY);
-    return raw ? (JSON.parse(raw) as LifeCharacter) : null;
+    return raw ? unwrapSavedBundle(JSON.parse(raw)) : null;
   } catch {
     return null;
   }
 }
 
-function persist(character: LifeCharacter | null, uid: string | undefined) {
+function persist(
+  character: LifeCharacter | null,
+  pendingChores: Chore[],
+  pendingEvents: LifeEvent[],
+  uid: string | undefined,
+) {
+  const bundle = character ? { version: SAVE_VERSION, character, pendingChores, pendingEvents } : null;
   try {
-    if (character) localStorage.setItem(SAVE_KEY, JSON.stringify(character));
+    if (bundle) localStorage.setItem(SAVE_KEY, JSON.stringify(bundle));
     else localStorage.removeItem(SAVE_KEY);
   } catch {
     // localStorage unavailable — life sim just won't survive a refresh.
   }
-  if (uid) void writeCloudSave(uid, { lifeSim: character });
+  if (uid) void writeCloudSave(uid, { lifeSim: bundle });
 }
 
 const STAT_LABELS: { key: keyof LifeCharacter["stats"]; label: string; isNaira?: boolean }[] = [
@@ -114,7 +166,12 @@ const STAT_LABELS: { key: keyof LifeCharacter["stats"]; label: string; isNaira?:
 type CreationStep = "auth" | "name" | "dob" | "faith" | "questions" | "reveal";
 
 export function LifeSim({ onExit }: Props) {
-  const [character, setCharacter] = useState<LifeCharacter | null>(() => loadSaved());
+  // Read once, on mount — the lazy useState initializer only ever runs
+  // the first time, so character/pendingChores/pendingEvents all agree on
+  // the exact same load (and, when a fresh roll is needed, the exact same
+  // random roll) rather than each independently re-reading/re-rolling.
+  const [initialSave] = useState(() => loadSavedBundle());
+  const [character, setCharacter] = useState<LifeCharacter | null>(() => initialSave?.character ?? null);
   const [nameInput, setNameInput] = useState("");
   const [creationStep, setCreationStep] = useState<CreationStep>("auth");
   const [birthDateInput, setBirthDateInput] = useState("");
@@ -124,7 +181,7 @@ export function LifeSim({ onExit }: Props) {
   const [reveal, setReveal] = useState<{ tier: ReturnType<typeof rollWealthTier>["tier"]; inheritance: number } | null>(
     null,
   );
-  const [pendingEvents, setPendingEvents] = useState<LifeEvent[]>([]);
+  const [pendingEvents, setPendingEvents] = useState<LifeEvent[]>(() => initialSave?.pendingEvents ?? []);
   const [showJobs, setShowJobs] = useState(false);
   const [showShop, setShowShop] = useState(false);
   const [shopCategory, setShopCategory] = useState<ShopCategory | null>(null);
@@ -133,19 +190,15 @@ export function LifeSim({ onExit }: Props) {
   const [showMarriage, setShowMarriage] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [pendingJob, setPendingJob] = useState<JobId | null>(null);
-  // Not persisted in the save — a reload just rolls a fresh set of chores
-  // for the current year rather than remembering which were already done,
-  // which is fine for low-stakes busywork like this. rollYearWork already
-  // returns nothing for the infant band (ages 0-2) on its own — there's
-  // no separate age cutoff needed here, and gating on
-  // AGE_SCHOOL_CHOICE_CUTOFF used to wrongly suppress ages 3-10's real
-  // child-band chores/events too (the school choice is meant to be one
-  // extra step alongside them, not a replacement for a decade of
-  // gameplay) — that was a real bug.
-  const [pendingChores, setPendingChores] = useState<Chore[]>(() => {
-    const saved = loadSaved();
-    return saved && saved.alive ? rollYearWork(saved).chores : [];
-  });
+  // Persisted alongside the character (see loadSavedBundle/persist) so a
+  // reload can't be used to dodge a bad year's events/chores — that was a
+  // real bug. rollYearWork already returns nothing for the infant band
+  // (ages 0-2) on its own — there's no separate age cutoff needed here,
+  // and gating on AGE_SCHOOL_CHOICE_CUTOFF used to wrongly suppress ages
+  // 3-10's real child-band chores/events too (the school choice is meant
+  // to be one extra step alongside them, not a replacement for a decade
+  // of gameplay) — that was also a real bug.
+  const [pendingChores, setPendingChores] = useState<Chore[]>(() => initialSave?.pendingChores ?? []);
   const [choreAttempt, setChoreAttempt] = useState(0);
   const uid = useAuthStore((s) => s.user?.uid);
   const authEnabled = useAuthStore((s) => s.enabled);
@@ -181,9 +234,9 @@ export function LifeSim({ onExit }: Props) {
   }, [currentChoreId, choreAttempt]);
 
   useEffect(() => {
-    persist(character, uid);
+    persist(character, pendingChores, pendingEvents, uid);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [character]);
+  }, [character, pendingChores, pendingEvents]);
 
   // On sign-in, prefer whatever life is already saved to this account (so
   // switching devices picks up where you left off) over whatever's in this
@@ -192,7 +245,11 @@ export function LifeSim({ onExit }: Props) {
     if (!uid || pulledForUid.current === uid) return;
     pulledForUid.current = uid;
     void fetchCloudSave(uid).then((cloud) => {
-      if (cloud?.lifeSim) setCharacter(cloud.lifeSim as LifeCharacter);
+      const bundle = cloud?.lifeSim ? unwrapSavedBundle(cloud.lifeSim) : null;
+      if (!bundle) return;
+      setCharacter(bundle.character);
+      setPendingChores(bundle.pendingChores);
+      setPendingEvents(bundle.pendingEvents);
     });
   }, [uid]);
 

@@ -285,6 +285,35 @@ note in Lagos Life's intro screen).
   `uid`-keyed effect in `LifeSim.tsx`. There's no conflict resolution UI —
   whichever save the pull finds (cloud if present, else local) becomes
   authoritative for that device from then on.
+- **Saves carry pending chores/events, and survive missing fields.**
+  `LifeSim.tsx`'s `SavedBundle` (`{character, pendingChores,
+  pendingEvents}`) is the one shape used everywhere a save is read or
+  written — localStorage (`SAVE_KEY`, wrapped in `{version: SAVE_VERSION,
+  ...bundle}`) and the Firestore `lifeSim` field alike, via
+  `unwrapSavedBundle`/`persist`. Two real bugs this fixes:
+  1. A reload used to drop `pendingChores`/`pendingEvents` entirely (they
+     were plain `useState([])`, never persisted), letting a player dodge
+     a bad year's events/chores just by closing the tab before resolving
+     them.
+  2. Even after persisting them locally, the cloud-sync effect
+     (`fetchCloudSave` on sign-in) used to unconditionally re-roll a
+     fresh `pendingChores`/`pendingEvents` for the pulled-in character —
+     and since Firebase Auth persists across a reload, that effect
+     re-fires on every reload for a signed-in player, silently
+     clobbering the just-loaded, correct local queue with a different
+     random one. Fixed by writing the pending queues into the cloud
+     payload too (same `SavedBundle` shape `unwrapSavedBundle` reads back
+     out), not just rerolling blind.
+  `migrateCharacter`/`SAVE_VERSION` in `lifeSim.ts` is what makes
+  `unwrapSavedBundle` safe against an old save shape — it backfills any
+  field missing from an older `LifeCharacter` (e.g. `choreGameHistory`,
+  added after some saves already existed) with the same default
+  `createCharacter` uses, and returns `null` for anything that isn't
+  recognizable as a character at all (corrupt or unrelated JSON) so the
+  caller falls back to "no save" instead of a bare `JSON.parse(...) as
+  LifeCharacter` cast crashing deep in the engine wherever that missing
+  field is first read. Bump `SAVE_VERSION` and add a default to
+  `CHARACTER_FIELD_DEFAULTS` whenever `LifeCharacter` gains a field.
 - **Marriage** (`src/ui/LifeSimSocial.tsx`, the "Marriage" tab in
   `LifeSim.tsx`, shown once signed in and age >= 18): real player-to-player,
   not an NPC. `lifesimPresence/{uid}` (character name + age) drives the

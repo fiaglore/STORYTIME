@@ -85,6 +85,11 @@ export interface LifeCharacter {
   // to Firestore.
   spouseUid?: string;
   spouseName?: string;
+  // uids this player has blocked — entirely local/client-side (see
+  // blockPlayer/unblockPlayer below): hides them from the nearby-players
+  // list and from incoming chat messages, without needing their
+  // cooperation or a moderation backend.
+  blockedUids: string[];
 }
 
 export interface LifeStage {
@@ -151,6 +156,7 @@ export function createCharacter(name: string): LifeCharacter {
     earnedThisYear: 0,
     spentThisYear: 0,
     hustlesThisYear: 0,
+    blockedUids: [],
   };
 }
 
@@ -407,4 +413,19 @@ export function marry(character: LifeCharacter, spouseUid: string, spouseName: s
     stats: applyDelta(character.stats, { happiness: 10 }),
     log: [...character.log, `Age ${character.age}: Married ${spouseName}.`],
   };
+}
+
+// Blocking is entirely local — it doesn't need the other player's
+// cooperation or any Firestore write of its own. The UI uses it to hide a
+// uid from the nearby-players list (lifesimPresence) and from incoming
+// chat messages (chats/{chatId}/messages) — see the "Chat" section of
+// CLAUDE.md for the full safety-rails picture (this, a profanity filter,
+// a send rate limit, and reporting).
+export function blockPlayer(character: LifeCharacter, uid: string): LifeCharacter {
+  if (character.blockedUids.includes(uid)) return character;
+  return { ...character, blockedUids: [...character.blockedUids, uid] };
+}
+
+export function unblockPlayer(character: LifeCharacter, uid: string): LifeCharacter {
+  return { ...character, blockedUids: character.blockedUids.filter((u) => u !== uid) };
 }

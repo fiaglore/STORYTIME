@@ -30,6 +30,7 @@ import { useAuthStore } from "../engine/authStore";
 import { AccountSection } from "./AccountSection";
 import { latestDelta, useStatDeltas } from "./useStatDeltas";
 import { JobInterviewGame, type InterviewResult } from "./JobInterviewGame";
+import { LifeSimSocial } from "./LifeSimSocial";
 
 // Realistic one-time bonus/penalty on top of the job itself — see
 // lifeEvents.ts's header comment for the real-Naira economy this plugs into.
@@ -91,6 +92,7 @@ export function LifeSim({ onExit }: Props) {
   const [showJobs, setShowJobs] = useState(false);
   const [showShop, setShowShop] = useState(false);
   const [showSkills, setShowSkills] = useState(false);
+  const [showMarriage, setShowMarriage] = useState(false);
   const [pendingJob, setPendingJob] = useState<JobId | null>(null);
   // Not persisted in the save — a reload just rolls a fresh set of chores
   // for the current year rather than remembering which were already done,
@@ -194,6 +196,7 @@ export function LifeSim({ onExit }: Props) {
     setShowJobs(false);
     setShowShop(false);
     setShowSkills(false);
+    setShowMarriage(false);
   };
 
   if (!character) {
@@ -353,6 +356,7 @@ export function LifeSim({ onExit }: Props) {
               setShowJobs((s) => !s);
               setShowShop(false);
               setShowSkills(false);
+              setShowMarriage(false);
             }}
           >
             {job ? "Change job" : "Get a job"}
@@ -364,6 +368,7 @@ export function LifeSim({ onExit }: Props) {
             setShowShop((s) => !s);
             setShowJobs(false);
             setShowSkills(false);
+            setShowMarriage(false);
           }}
         >
           Shop
@@ -374,10 +379,24 @@ export function LifeSim({ onExit }: Props) {
             setShowSkills((s) => !s);
             setShowJobs(false);
             setShowShop(false);
+            setShowMarriage(false);
           }}
         >
           Skills
         </button>
+        {uid && character.age >= 18 && (
+          <button
+            className={`lifesim-tab ${showMarriage ? "lifesim-tab--active" : ""}`}
+            onClick={() => {
+              setShowMarriage((s) => !s);
+              setShowJobs(false);
+              setShowShop(false);
+              setShowSkills(false);
+            }}
+          >
+            {character.spouseUid ? "💍" : "Marriage"}
+          </button>
+        )}
       </div>
 
       {showJobs && !pendingJob && (
@@ -446,6 +465,10 @@ export function LifeSim({ onExit }: Props) {
             );
           })}
         </div>
+      )}
+
+      {showMarriage && uid && (
+        <LifeSimSocial character={character} uid={uid} onUpdateCharacter={setCharacter} />
       )}
 
       {pendingJob && (

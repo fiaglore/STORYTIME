@@ -149,6 +149,34 @@ separate systems — don't assume one when working on the other.
   target zone) shown before a Lagos Life job is confirmed; the job is
   granted regardless of the result, which only changes a one-time naira/
   happiness bonus — see `INTERVIEW_BONUS` in `LifeSim.tsx`.
+- Shop (`src/content/shop.ts`) and skills (`src/content/skills.ts`) are
+  Lagos Life's other two ways to spend naira. `buyItem`/`trainSkill` in
+  `lifeSim.ts` are both "refuse rather than throw" (unaffordable or
+  already-owned is a no-op, same pattern as `resolveEvent`'s gated
+  choices). Skills aren't just flavor numbers — `Job.requiresSkill` gates
+  which jobs `availableJobs` even offers (hawking has no requirement, so
+  it's always the fallback); `takeJob` re-checks this itself too, same
+  "can't be bypassed even if a caller skips the UI's filtering" principle
+  as `resolveEvent`/`isChoiceAvailable`.
+- Age Up also requires earning *and* spending a minimum amount of naira
+  each year (`AGE_UP_REQUIREMENTS`, `meetsAgeUpRequirements`), on top of
+  clearing that year's chores. `LifeCharacter.earnedThisYear`/
+  `spentThisYear` reset at the start of each year in `ageUp` (job income,
+  if any, becomes the new year's first earned contribution) and every
+  naira-moving action feeds them via the shared `trackNaira` helper
+  (chores, events, shop, skill training) — it tracks the *actual* change
+  applied, after the naira-floors-at-0 clamp in `applyDelta`, not the raw
+  delta requested. `hustle()` is a small, always-available, capped-per-year
+  (`MAX_HUSTLES_PER_YEAR`) way to earn cash on demand, specifically so an
+  unemployed character with an unlucky year (no money-earning event or
+  chore) can never be soft-locked out of the earn requirement — **this was
+  a real bug**: its first payout range could bottom out, across the full
+  per-year cap, below the adult band's `minEarn`, meaning no amount of
+  hustling could ever clear it for an unlucky character. If you touch
+  `hustle`'s payout range or `MAX_HUSTLES_PER_YEAR` or
+  `AGE_UP_REQUIREMENTS`, re-verify `worst-case hustle total >= hardest
+  band's minEarn` still holds (there's a 50-trial regression test for
+  this — keep it).
 - Age Up is deliberately semi-tedious: `src/content/chores.ts`'s `CHORES`
   is a pool of small, no-choice, single-"Done"-tap daily tasks (distinct
   from `LIFE_EVENTS`, which have real branching choices and bigger
@@ -222,6 +250,48 @@ isn't set up" note in Settings / Lagos Life's intro screen).
   call `clearPresence` on unmount. Only signed-in players broadcast or see
   presence — it's a cloud-account feature like sync itself, not available
   to purely-local play.
+- **Marriage** (`src/ui/LifeSimSocial.tsx`, the "Marriage" tab in
+  `LifeSim.tsx`, shown once signed in and age >= 18): real player-to-player,
+  not an NPC. `lifesimPresence/{uid}` (character name + age, separate from
+  the story-mode `presence` collection above) drives the "nearby players"
+  list; `marriageProposals/{id}` holds the propose/accept/decline flow.
+  Neither side ever writes the other's `users/{uid}` save document —
+  instead, once a proposal's `status` flips to `"accepted"`, **both**
+  clients independently observe that (their own `watchIncomingProposals`/
+  `watchOutgoingProposals` subscription sees it) and call `marry()` on
+  their own character, persisting it themselves. This is why `marry()` is
+  a plain local/pure function in `lifeSim.ts` with no Firestore call in
+  it. `firestore.rules` needs its own `lifesimPresence/{uid}` and
+  `marriageProposals/{id}` blocks (already in the repo's copy, needs
+  publishing same as every other collection here).
+- **Chat** (same `LifeSimSocial.tsx`): free-text, pairwise, any two
+  players who can see each other in the nearby-players list (or a married
+  spouse). `chatId` is a deterministic sort of the two uids
+  (`chatIdFor`), so both sides land on the same `chats/{chatId}` doc with
+  no lookup step; messages live in `chats/{chatId}/messages`. This ships
+  with four **basic** safety rails, explicitly not a full moderation
+  system:
+  1. `src/engine/profanityFilter.ts` — a client-side word-list substring
+     check before send. Catches overt profanity only; doesn't catch
+     misspellings or other languages, and doesn't stop a client that
+     calls `sendChatMessage` directly instead of going through the UI
+     (there's no backend to enforce this server-side).
+  2. A client-side send rate limit (`CHAT_RATE_LIMIT_MS` in
+     `LifeSimSocial.tsx`) — same caveat, UI-layer only.
+  3. Block (`LifeCharacter.blockedUids`, `blockPlayer`/`unblockPlayer` in
+     `lifeSim.ts`) — entirely local, no Firestore write of its own. Hides
+     a uid from the nearby-players list and filters their messages out of
+     the chat view client-side; doesn't stop them from still writing to
+     the chat document in Firestore.
+  4. Report (`reportMessage`) — write-only from the client
+     (`firestore.rules` denies read on `reports/{id}`). There is **no
+     in-app moderation panel or automated action** — a report is captured
+     for the project owner to review manually via the Firebase console.
+     Don't describe chat to users as "moderated"; it isn't, beyond these
+     four client-side layers.
+  Keep this scope in mind before extending chat further: a backend
+  (Cloud Functions or similar) would be needed for any of this to be
+  enforced against a client that doesn't cooperate.
 
 ## Repo layout
 
@@ -233,13 +303,14 @@ scripts/compile-ink.mjs     compiles chapters/*.ink -> src/content/compiled/*.js
 scripts/smoke-lifesim.mjs   manual Playwright smoke test for Lagos Life mode
 src/engine/                 inkRunner (React hook wrapping inkjs), lifeSim (pure life-sim
                              engine), firebase.ts (lazy-loaded Firebase SDK wrapper),
-                             authStore (sign-in state), Zustand store, saves
+                             authStore (sign-in state), profanityFilter, Zustand store, saves
 src/scenes/                 mini-scene React components (frying, change-making, ...)
 src/ui/                     map hub, RpgMap (chapter play screen), LifeSim (life-sim mode),
-                             AccountSection (sign-in/up/out widget),
-                             endings gallery, settings, etc.
+                             LifeSimSocial (marriage + chat), AccountSection (sign-in/up/out
+                             widget), endings gallery, settings, etc.
 src/content/                chapter metadata (chapters.json), lifeEvents.ts (life-sim event
-                             pool), glossary.json, compiled ink JSON
+                             pool), chores.ts, shop.ts, skills.ts, glossary.json, compiled
+                             ink JSON
 tests/                      Vitest engine tests (chapters + life sim) + a manual Playwright
                              e2e smoke script for story mode
 ```

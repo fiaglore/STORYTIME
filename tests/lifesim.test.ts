@@ -3,6 +3,7 @@ import {
   ageUp,
   applyDelta,
   availableJobs,
+  blockPlayer,
   buyItem,
   checkDeath,
   createCharacter,
@@ -14,6 +15,7 @@ import {
   resolveEvent,
   takeJob,
   trainSkill,
+  unblockPlayer,
   AGE_UP_REQUIREMENTS,
   MAX_HUSTLES_PER_YEAR,
   type LifeCharacter,
@@ -41,6 +43,7 @@ function baseCharacter(overrides: Partial<LifeCharacter> = {}): LifeCharacter {
     earnedThisYear: 0,
     spentThisYear: 0,
     hustlesThisYear: 0,
+    blockedUids: [],
     ...overrides,
   };
 }
@@ -448,6 +451,18 @@ describe("marriage", () => {
     const married = baseCharacter({ spouseUid: "existing-spouse", spouseName: "Bisi" });
     const next = marry(married, "someone-else", "Chidi");
     expect(next).toBe(married);
+  });
+});
+
+describe("blocking", () => {
+  it("blocks and unblocks a uid, idempotently", () => {
+    const c = baseCharacter();
+    const blocked = blockPlayer(c, "pest-uid");
+    expect(blocked.blockedUids).toEqual(["pest-uid"]);
+    // blocking the same uid twice doesn't duplicate it
+    expect(blockPlayer(blocked, "pest-uid").blockedUids).toEqual(["pest-uid"]);
+    const unblocked = unblockPlayer(blocked, "pest-uid");
+    expect(unblocked.blockedUids).toEqual([]);
   });
 });
 

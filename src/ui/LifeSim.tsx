@@ -3,7 +3,6 @@ import {
   ageUp,
   applyDelta,
   availableJobs,
-  bandForAge,
   createCharacter,
   isChoiceAvailable,
   lifeStageForAge,
@@ -87,7 +86,7 @@ export function LifeSim({ onExit }: Props) {
   // which is fine for low-stakes busywork like this.
   const [pendingChores, setPendingChores] = useState<Chore[]>(() => {
     const saved = loadSaved();
-    return saved && saved.alive ? pickChores(bandForAge(saved.age), CHORES_PER_YEAR) : [];
+    return saved && saved.alive ? pickChores(saved, CHORES_PER_YEAR) : [];
   });
   const uid = useAuthStore((s) => s.user?.uid);
   const pulledForUid = useRef<string | null>(null);
@@ -113,7 +112,7 @@ export function LifeSim({ onExit }: Props) {
     const next = createCharacter(nameInput);
     setCharacter(next);
     setActiveEvent(null);
-    setPendingChores(pickChores(bandForAge(next.age), CHORES_PER_YEAR));
+    setPendingChores(pickChores(next, CHORES_PER_YEAR));
   };
 
   const handleChore = (chore: Chore) => {
@@ -127,7 +126,7 @@ export function LifeSim({ onExit }: Props) {
     const aged = ageUp(character);
     setCharacter(aged);
     if (aged.alive) {
-      setPendingChores(pickChores(bandForAge(aged.age), CHORES_PER_YEAR));
+      setPendingChores(pickChores(aged, CHORES_PER_YEAR));
       if (Math.random() < EVENT_CHANCE) {
         const event = pickEvent(aged);
         if (event) setActiveEvent(event);

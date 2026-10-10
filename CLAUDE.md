@@ -152,14 +152,25 @@ separate systems — don't assume one when working on the other.
 - Age Up is deliberately semi-tedious: `src/content/chores.ts`'s `CHORES`
   is a pool of small, no-choice, single-"Done"-tap daily tasks (distinct
   from `LIFE_EVENTS`, which have real branching choices and bigger
-  stakes); `pickChores(band, CHORES_PER_YEAR)` rolls a fresh set every time
-  a year starts (character creation and every `ageUp`), and `LifeSim.tsx`
-  won't show the Age Up button again until `pendingChores` is empty — see
-  `resolveChore` in `lifeSim.ts`. A band with no chores in the pool
-  (infancy) just gets an empty list, so Age Up stays immediate there; add
-  new chores to the pool rather than raising `CHORES_PER_YEAR` if an age
-  band needs more variety, so the friction doesn't come from repeating the
-  same 2-3 chores over and over.
+  stakes); `pickChores(character, CHORES_PER_YEAR)` rolls a fresh set every
+  time a year starts (character creation and every `ageUp`), and
+  `LifeSim.tsx` won't show the Age Up button again until `pendingChores` is
+  empty — see `resolveChore` in `lifeSim.ts`. A band with no chores in the
+  pool (infancy) just gets an empty list, so Age Up stays immediate there;
+  add new chores to the pool rather than raising `CHORES_PER_YEAR` if an
+  age band needs more variety, so the friction doesn't come from repeating
+  the same 2-3 chores over and over.
+- `pickChores` filters on more than age band — a chore that assumes a
+  specific economic reality (`maxNaira`: queuing to charge your phone
+  implies no power at home; `minNaira`: having a driver to settle disputes
+  between implies you can afford one; `requiresAsset`/`excludesAsset`:
+  owning a generator means you don't queue at a charging kiosk, owning a
+  borehole means you don't fetch water) only gets offered when that reality
+  still holds for the character's current naira balance and `assets`. A
+  character with ₦3.2M saved should never be offered "queue to charge your
+  phone" — that was a real bug, chores used to be picked on age band alone.
+  Any new chore that implies a particular standard of living needs one of
+  these fields, not just a plausible-sounding `bands` entry.
 - Run `npm test` and `npm run build` before finishing any task.
 
 ## Firebase / cloud save

@@ -185,15 +185,46 @@ describe("chores", () => {
   });
 
   it("returns an empty list for a band with no chores (infant) rather than throwing", () => {
-    expect(pickChores("infant", 3)).toEqual([]);
+    expect(pickChores(baseCharacter({ age: 1 }), 3)).toEqual([]);
   });
 
   it("never returns more chores than requested or than exist for the band", () => {
-    const picked = pickChores("adult", 3);
+    const picked = pickChores(baseCharacter({ age: 25 }), 3);
     expect(picked.length).toBeLessThanOrEqual(3);
     expect(picked.every((c) => c.bands.includes("adult"))).toBe(true);
     // no duplicates
     expect(new Set(picked.map((c) => c.id)).size).toBe(picked.length);
+  });
+
+  it("filters out infrastructure-poverty-coded chores once the character is well off", () => {
+    const rich = baseCharacter({ age: 25, stats: { happiness: 50, health: 50, smarts: 50, looks: 50, naira: 3_200_000 } });
+    // Run many draws — pickChores shuffles, so a single draw proves nothing.
+    for (let i = 0; i < 30; i++) {
+      const picked = pickChores(rich, 20); // ask for way more than exist to see the whole pool
+      expect(picked.some((c) => c.id === "charge-phone")).toBe(false);
+      expect(picked.some((c) => c.id === "fuel-queue")).toBe(false);
+    }
+  });
+
+  it("excludes a chore once the character owns the asset that makes it moot", () => {
+    const poor = baseCharacter({ age: 25, assets: ["generator"] });
+    for (let i = 0; i < 30; i++) {
+      const picked = pickChores(poor, 20);
+      expect(picked.some((c) => c.id === "charge-phone")).toBe(false);
+    }
+  });
+
+  it("only offers a minNaira chore once the character can afford the implied lifestyle", () => {
+    const poor = baseCharacter({ age: 25 });
+    const rich = baseCharacter({ age: 25, stats: { happiness: 50, health: 50, smarts: 50, looks: 50, naira: 5_000_000 } });
+    let everSeenForPoor = false;
+    let everSeenForRich = false;
+    for (let i = 0; i < 30; i++) {
+      if (pickChores(poor, 20).some((c) => c.id === "manage-staff")) everSeenForPoor = true;
+      if (pickChores(rich, 20).some((c) => c.id === "manage-staff")) everSeenForRich = true;
+    }
+    expect(everSeenForPoor).toBe(false);
+    expect(everSeenForRich).toBe(true);
   });
 
   it("resolveChore applies the delta and logs the chore's text", () => {

@@ -163,8 +163,8 @@ the single surviving mode, `src/ui/LifeSim.tsx`.
   band's minEarn` still holds (there's a 50-trial regression test for
   this — keep it).
 - Ages 0 through `AGE_SCHOOL_CHOICE_CUTOFF` (10) get a one-time school
-  choice as *one extra step*, not a replacement for a decade of
-  gameplay — `src/content/schools.ts`'s `SCHOOLS`, gated by
+  choice as *one extra step*, not a replacement for real gameplay —
+  `src/content/schools.ts`'s `SCHOOLS`, gated by
   `schoolsAvailableTo(wealthTier)` (a school's `minTier` must be at or
   below the character's own tier, same "richer unlocks more" direction as
   every other wealth gate). `chooseSchool` sets `LifeCharacter.schoolId`
@@ -173,30 +173,34 @@ the single surviving mode, `src/ui/LifeSim.tsx`.
   cutoff, then stops (the field stays set, just inert past that age).
   `LifeSim.tsx` shows the school picker whenever `age <= cutoff &&
   !schoolId` — it only blocks the one year it's chosen in (every year
-  after, `schoolId` is already set). Every year still gets
-  `CHORES_PER_YEAR` (4) chores and up to `EVENTS_PER_YEAR` (5) life
-  events regardless of age, resolved one at a time via `pendingChores`/
-  `pendingEvents` queues before Age Up is offered — `pickChores`/
-  `pickEvent` already return nothing for the infant band (ages 0-2) on
-  their own, so ages 3-10 get the same real child-band content as any
-  other year. **This used to be gated on `age > AGE_SCHOOL_CHOICE_CUTOFF`
-  outright, which silently zeroed out ages 3-10's gameplay entirely (just
-  the school pick, then ten years of clicking "Age up") — a real bug,
-  don't reintroduce that gate.** `handleAgeUp`'s event-picking loop also
-  dedupes within the batch (`pickedIds`) — `pickEvent` only avoids
-  repeats against `seenEventIds`, which doesn't update until an event is
-  actually resolved, so without the dedupe the same event could be drawn
-  twice in one year.
+  after, `schoolId` is already set). **This used to be gated on
+  `age > AGE_SCHOOL_CHOICE_CUTOFF` outright for chores/events too, which
+  silently zeroed out ages 3-10's gameplay entirely (just the school
+  pick, then years of clicking "Age up" with nothing else to do) — a real
+  bug, don't reintroduce that gate.**
+- Every year (past the infant band, ages 0-2) rolls chores and life
+  events via `rollYearWork(character)` in `lifeSim.ts` — one entry point
+  used by both the initial `loadSaved` state and `handleAgeUp`, so they
+  can never drift out of sync on when gameplay starts. How many of each
+  is band-scaled, not flat: `CHORES_PER_YEAR_BY_BAND`/
+  `EVENTS_PER_YEAR_BY_BAND` give `child` a lighter load (2/2) than
+  `teen`/`adult` (4/5) — a young child's event/chore pools are small, so
+  loading them up the same as an adult would mean mostly repeats.
+  `pickEvents` (not the singular `pickEvent`, which only returns one)
+  dedupes within the year's own batch by drawing unseen-then-shuffled
+  rather than calling `pickEvent` in a loop — `seenEventIds` only updates
+  once an event is actually resolved, so a naive loop could draw the same
+  event twice before either was played; this was a real bug.
 - Age Up is deliberately semi-tedious: `src/content/chores.ts`'s `CHORES`
   is a pool of small daily tasks (distinct from `LIFE_EVENTS`, which have
-  real branching choices and bigger stakes); `pickChores(character,
-  CHORES_PER_YEAR)` rolls a fresh set every time a year starts (character
-  creation and every `ageUp`), and `LifeSim.tsx` won't show the Age Up
-  button again until `pendingChores` is empty. A band with no chores in
-  the pool (infancy) just gets an empty list, so Age Up stays immediate
-  there; add new chores to the pool rather than raising
-  `CHORES_PER_YEAR` if an age band needs more variety, so the friction
-  doesn't come from repeating the same 2-3 chores over and over.
+  real branching choices and bigger stakes); `rollYearWork` rolls a fresh
+  set every time a year starts (character creation and every `ageUp`),
+  and `LifeSim.tsx` won't show the Age Up button again until
+  `pendingChores` is empty. The infant band gets an empty list (0 in
+  `CHORES_PER_YEAR_BY_BAND`/`EVENTS_PER_YEAR_BY_BAND`), so Age Up stays
+  immediate there; add new chores to the pool rather than raising a
+  band's count if it needs more variety, so the friction doesn't come
+  from repeating the same 2-3 chores over and over.
 - Each chore belongs to one of three `ChoreCategory`s (`labor` / `errands`
   / `finance`), each with **two** mini-game variants
   (`VARIANTS_BY_CATEGORY` in `content/chores.ts`; `src/ui/

@@ -15,10 +15,9 @@ export default defineConfig(({ command, isPreview }) => ({
       registerType: "autoUpdate",
       includeAssets: ["favicon.svg"],
       manifest: {
-        name: "STORYTIME: What Is It About Lagos?",
-        short_name: "Storytime Lagos",
-        description:
-          "A narrative choice game companion to the book What Is It About Lagos.",
+        name: "What Is It About Lagos?",
+        short_name: "Lagos Life",
+        description: "A BitLife-style procedural life sim set in Lagos.",
         theme_color: "#c96a2b",
         background_color: "#fbf6ee",
         display: "standalone",

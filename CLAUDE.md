@@ -1,120 +1,34 @@
-# STORYTIME: What Is It About Lagos?
+# What Is It About Lagos?
 
-Narrative choice game, companion to the book "What Is It About Lagos".
-Design doc: docs/design.md. Read it before changing game rules.
-
-The app has two independent game modes, chosen from the title screen:
-**Play the stories** (the book's 7 Ink-scripted chapters, see below) and
-**Live a Lagos life** (`src/ui/LifeSim.tsx` — a BitLife-style procedural
-life sim: age up year by year through a pool of random Lagos-flavored
-events, no Ink/chapters involved). They share the app shell, brand
-styling and localStorage-based persistence conventions, but are otherwise
-separate systems — don't assume one when working on the other.
+A BitLife-style procedural life sim set in Lagos: age up year by year
+through a pool of random Lagos-flavored events, no Ink/chapters or book
+tie-in — this used to be a companion app to a book's Ink-scripted
+chapters, but that "Play the stories" mode has been removed from this
+repo entirely (it's now a separate project). Everything in this repo is
+the single surviving mode, `src/ui/LifeSim.tsx`.
 
 ## Stack
 
-- Vite + React + TypeScript, Zustand for state
-- Ink chapter scripts in chapters/, compiled to src/content/compiled/*.json
-  by `npm run compile:ink` (runs automatically before `dev` and `build`),
-  run in the browser with inkjs
-- idb-keyval for saves (IndexedDB), localStorage only for the age-gate flag
+- Vite + React + TypeScript, Zustand for auth state only (`authStore.ts`)
+  — the life sim itself uses plain React `useState` in `LifeSim.tsx`, not
+  Zustand
 - vite-plugin-pwa; deployed to GitHub Pages by .github/workflows/deploy.yml
-- Firebase (Auth + Firestore) for optional cloud save/sign-in — see
-  "Firebase / cloud save" below. Entirely optional: with no config, both
-  game modes work exactly as before, fully local.
+- Firebase (Auth + Firestore) for optional cloud save/sign-in and
+  player-to-player features — see "Firebase / cloud save" below. Entirely
+  optional: with no config, the game works exactly as before, fully local.
 
 ## Rules
 
-- Story text lives only in `chapters/*.ink`. Never hard-code story text in
-  React — mini-scenes in `src/scenes/` only change how an ink choice set is
-  *presented*, they never add branching logic of their own.
-- Every chapter's ink file declares the shared meters `naira` and `spirit`
-  (0–100) plus its own chapter meter(s). `src/engine/inkRunner.ts` reads
-  every declared numeric Ink variable automatically — no React-side meter
-  wiring needed when you add a new chapter meter.
-- Endings are tagged in ink with `# ending_id: <id>`, `# ending: <Title>`,
-  `# verdict: <...>`, and `# book_canon` on the As Written ending. The
-  `ending_id` must match an id listed in `src/content/chapters.json` for
-  that chapter.
-- Mini-scenes are opted into with a `# scene: <name>` tag on the ink line
-  before the choice set; `RpgMap.tsx` dispatches on that tag.
-- Chapters are played as a 2D top-down RPG (`src/ui/RpgMap.tsx`), not a
-  scrolling visual novel. A `# stage: <charId>@<bgLocation>` tag says who's
-  visible and where; a `# spot: <hotspotId>` tag says which map hotspot is
-  "active" — the player must walk/click there to open the dialogue panel
-  for that knot's choices. `hotspotId` must be a key in `RpgMap.tsx`'s
-  `HOTSPOTS` map (currently Chapter 1's Oshodi market layout only — a new
-  chapter with a different setting needs its own hotspot map and
-  background art, or a second RpgMap-like component).
-- Walking is tap/click-anywhere-on-the-floor via `handleStageClick`, not
-  "press the hotspot button" — a tap within `HOTSPOT_TAP_RADIUS` of the
-  active hotspot snaps onto it and opens the dialogue (same as tapping its
-  button directly, which stays as the accessible/keyboard path), a tap
-  further away just walks there for free wandering, no dialogue. The
-  player sprite also alternates between its idle and `-walk` mid-stride
-  frame (`WALK_FRAMES`, `walkFrame` state, `WALK_FRAME_MS`) while
-  `walking` is true, instead of sliding a single static pose across the
-  map — see `scripts/gen-sprites.py`'s `walking` param for how the
-  mid-stride frames are drawn.
-- `AMBIENT_NPCS` in `RpgMap.tsx` are purely decorative background market-
-  goers (sprites `passerby-1`/`passerby-2`, distinct colors from both the
-  player and the named story NPCs so they're not mistaken for someone with
-  a line of dialogue) that drift around a home point on a timer
-  (`AMBIENT_WANDER_MS`). They're unrelated to the real-player presence
-  ghosts (`.rpg-ghost`, see "Firebase / cloud save" below) — ambient NPCs
-  are always there regardless of whether anyone else is online; presence
-  ghosts are other real signed-in players.
-- `.rpg-stage` fills the available vertical space (`flex: 1` inside
-  `.story-screen`'s flex column) instead of a fixed `aspect-ratio` box —
-  it used to leave roughly half the screen blank below a short landscape
-  box. The background art (`map-oshodi.png`) still renders via
-  `object-fit: cover`, so a taller stage just reveals more of its existing
-  floor area and crops more of its width; don't reintroduce a fixed
-  aspect-ratio without checking whether that's bringing the dead space
-  back.
-- Player/NPC sprites (`public/sprites/*.png`) are generated by
-  `scripts/gen-sprites.py` (`python3 scripts/gen-sprites.py`, requires
-  Pillow) — a simplified but recognizably human figure (head, neck, torso,
-  arms with hands, legs, a face with eyes/brows/nose/mouth), not the
-  faceless blob-mascot shape these started as. Edit the script and re-run
-  it rather than hand-editing the PNGs; it renders at 4x supersample and
-  downscales once with LANCZOS (rendering straight at the final size, or
-  downscaling in two steps, produced visible blur in an earlier pass).
-- `index.css` defines a real dark theme (`--text`/`--bg`/etc. flip under
-  `prefers-color-scheme: dark` and `[data-theme="dark"]`), not just
-  `color-scheme: light dark` left to the browser. `.rpg-bubble` and
-  `.rpg-choice-pill` are intentionally always-white (a paper speech
-  bubble/choice pill look, not meant to follow the theme), so they use a
-  fixed `color: #241c15` rather than `var(--text)` — pairing a hardcoded
-  white background with the theme variable made the text flip to
-  near-white-on-white and vanish in dark mode on a real device. This was a
-  real bug. Any other element that intentionally keeps a fixed (not
-  theme-aware) background needs a fixed text color too, not `var(--text)`.
-- When a choice can lead to the *same* `spot` as the one just visited
-  (e.g. two consecutive knots both at "stall"), close the dialogue via the
-  choice handler itself, not an effect keyed on "did the spot id change" —
-  it won't change, and the dialogue will stay stuck open. This was a real
-  bug; see `handleChoose` in `RpgMap.tsx`.
-- Keep Nigerian Pidgin dialogue exactly as written; add glossary entries in
-  `src/content/glossary.json` (not yet wired into a tappable UI — see Open
-  questions in the design doc).
-- Cross-chapter flags are saved at chapter end and intended to be passed
-  into the next chapter's Ink story at start (see `useGameStore.setFlag` /
-  `getFlag`); only Chapter 1 exists today so this isn't exercised yet.
-- Every ending must be reachable by an automated test. `tests/*.test.ts`
-  drives the compiled Ink JSON directly (no browser needed) to prove every
-  declared ending is reachable; see `tests/the-grind.test.ts` as the
-  pattern for new chapters.
 - Lagos Life mode (`src/engine/lifeSim.ts` + `src/content/lifeEvents.ts`)
-  is plain TypeScript, no Ink involved. Add new random events to the
-  `LIFE_EVENTS` array in `lifeEvents.ts` (pick the right `AgeBand`s; the
-  "infant" band intentionally has no events — babies don't make choices).
-  Keep the engine functions in `lifeSim.ts` pure (character in, character
-  out) so they stay testable without a browser; see `tests/lifesim.test.ts`.
-- Lagos Life's `naira` is real Naira, not an abstract "k" unit — every cost
-  in `lifeEvents.ts` and every job's `payPerYear` in `lifeSim.ts`'s `JOBS`
-  is calibrated against a fuel price of NGN1,400/litre (see the math on
-  the `generator-bill` event) and real Lagos income/cost ranges. Keep new
+  is plain TypeScript. Add new random events to the `LIFE_EVENTS` array in
+  `lifeEvents.ts` (pick the right `AgeBand`s; the "infant" band
+  intentionally has no events — babies don't make choices). Keep the
+  engine functions in `lifeSim.ts` pure (character in, character out) so
+  they stay testable without a browser; see `tests/lifesim.test.ts`.
+- `naira` is real Naira, not an abstract "k" unit — every cost in
+  `lifeEvents.ts` and every job's `payPerYear` in `lifeSim.ts`'s `JOBS` is
+  calibrated against a fuel price of NGN1,400/litre (see the math on the
+  `generator-bill` event) and real Lagos income/cost ranges. Keep new
   content on that same real scale, and always format with
   `toLocaleString()` (`formatNaira` in `LifeSim.tsx`), never a bare number
   or a "k" suffix.
@@ -140,11 +54,8 @@ separate systems — don't assume one when working on the other.
   `resolveEvent`'s `next` object. Don't reintroduce a second tick point.
 - Shared gamification UI lives in `src/ui/`: `useStatDeltas.ts` diffs a
   `{key: value}` map across renders into short-lived floating +N/-N popup
-  events (used by `MeterBar.tsx` for naira/spirit/chapter-meter and by
-  `LifeSim.tsx` for its stats) — reuse it rather than re-implementing a
-  diff/timeout dance per screen. `ProgressBar.tsx` is a small reusable "N of
-  M" bar (chapter/endings counts) that reuses the `meter__track`/`meter__fill`
-  classes so every progress fill in the app animates identically.
+  events (used by `LifeSim.tsx` for its stats) — reuse it rather than
+  re-implementing a diff/timeout dance per screen.
 - `JobInterviewGame.tsx` is a timing mini-game (stop a sweeping marker in a
   target zone) shown before a Lagos Life job is confirmed; the job is
   granted regardless of the result, which only changes a one-time naira/
@@ -178,16 +89,16 @@ separate systems — don't assume one when working on the other.
   band's minEarn` still holds (there's a 50-trial regression test for
   this — keep it).
 - Age Up is deliberately semi-tedious: `src/content/chores.ts`'s `CHORES`
-  is a pool of small, no-choice, single-"Done"-tap daily tasks (distinct
-  from `LIFE_EVENTS`, which have real branching choices and bigger
-  stakes); `pickChores(character, CHORES_PER_YEAR)` rolls a fresh set every
-  time a year starts (character creation and every `ageUp`), and
-  `LifeSim.tsx` won't show the Age Up button again until `pendingChores` is
-  empty — see `resolveChore` in `lifeSim.ts`. A band with no chores in the
-  pool (infancy) just gets an empty list, so Age Up stays immediate there;
-  add new chores to the pool rather than raising `CHORES_PER_YEAR` if an
-  age band needs more variety, so the friction doesn't come from repeating
-  the same 2-3 chores over and over.
+  is a pool of small daily tasks (distinct from `LIFE_EVENTS`, which have
+  real branching choices and bigger stakes); `pickChores(character,
+  CHORES_PER_YEAR)` rolls a fresh set every time a year starts (character
+  creation and every `ageUp`), and `LifeSim.tsx` won't show the Age Up
+  button again until `pendingChores` is empty — see `resolveChore` in
+  `lifeSim.ts`. A band with no chores in the pool (infancy) just gets an
+  empty list, so Age Up stays immediate there; add new chores to the pool
+  rather than raising `CHORES_PER_YEAR` if an age band needs more variety,
+  so the friction doesn't come from repeating the same 2-3 chores over and
+  over.
 - `pickChores` filters on more than age band — a chore that assumes a
   specific economic reality (`maxNaira`: queuing to charge your phone
   implies no power at home; `minNaira`: having a driver to settle disputes
@@ -204,9 +115,9 @@ separate systems — don't assume one when working on the other.
 ## Firebase / cloud save
 
 Optional: if `VITE_FIREBASE_*` env vars aren't set, `firebaseEnabled` is
-`false` and both game modes behave exactly as before this feature existed
-(IndexedDB / localStorage only, no auth UI shown beyond a "cloud save
-isn't set up" note in Settings / Lagos Life's intro screen).
+`false` and the game behaves exactly as before this feature existed
+(localStorage only, no auth UI shown beyond a "cloud save isn't set up"
+note in Lagos Life's intro screen).
 
 - Config lives in `.env` (gitignored, local dev) or `.env.production`
   (committed — safe to commit: Firebase web config values aren't secrets,
@@ -215,9 +126,10 @@ isn't set up" note in Settings / Lagos Life's intro screen).
   console path to find each one (Project settings -> your web app -> SDK
   setup and configuration).
 - `firestore.rules` (repo root) must be pasted into Firebase Console ->
-  Firestore Database -> Rules -> Publish. It restricts each user to only
-  read/write their own `users/{uid}` document — nothing in this repo
-  enforces that except those rules, so don't skip publishing them.
+  Firestore Database -> Rules -> Publish every time it changes. It
+  restricts each user to only read/write their own `users/{uid}` document
+  — nothing in this repo enforces that except those rules, so don't skip
+  publishing them.
 - `src/engine/firebase.ts` lazy-loads the `firebase/*` packages via
   dynamic `import()`, only once something actually calls an auth/Firestore
   function (not at app boot, even when configured). A static top-level
@@ -225,45 +137,26 @@ isn't set up" note in Settings / Lagos Life's intro screen).
   281KB) for a PWA meant to work fully offline — don't reintroduce that by
   importing from `firebase/app`, `firebase/auth` or `firebase/firestore`
   anywhere outside this file.
-- `src/engine/authStore.ts` is the single Zustand store for sign-in state,
-  shared by both game modes. `src/ui/AccountSection.tsx` is the
-  sign-in/sign-up/sign-out widget, embedded in both Settings (story mode)
-  and Lagos Life's intro screen.
-- Cloud sync is "pull on sign-in, push on every local save": see
-  `useGameStore.syncFromCloud` (story mode, triggered from `App.tsx`) and
-  the `uid`-keyed effect in `LifeSim.tsx`. There's no conflict resolution
-  UI — whichever save the pull finds (cloud if present, else local)
-  becomes authoritative for that device from then on.
-- Live multiplayer presence (other signed-in players visible walking around
-  the same chapter's `RpgMap`) is a separate `presence/{uid}` Firestore
-  collection from the save data in `users/{uid}` — ephemeral and
-  world-readable by any signed-in user (needed so everyone can see everyone
-  else), never mixed into the private save doc. `firestore.rules` needs
-  its own `presence/{uid}` match block for this to work (already in the
-  repo's copy) — **this has to be pasted into the Firebase console and
-  published same as the `users/{uid}` block was**, or presence silently
-  does nothing (see `watchPresence`'s error callback / the `.catch(() =>
-  {})` on `writePresence`/`clearPresence` in `RpgMap.tsx` — it's designed
-  to fail open, not throw, so a deployment that hasn't republished rules
-  just shows no other players rather than breaking). `PRESENCE_STALE_MS`
-  (20s) filters out a doc from a closed tab that never got the chance to
-  call `clearPresence` on unmount. Only signed-in players broadcast or see
-  presence — it's a cloud-account feature like sync itself, not available
-  to purely-local play.
+- `src/engine/authStore.ts` is the single Zustand store for sign-in state.
+  `src/ui/AccountSection.tsx` is the sign-in/sign-up/sign-out widget,
+  embedded in Lagos Life's intro/settings screens.
+- Cloud sync is "pull on sign-in, push on every local save": see the
+  `uid`-keyed effect in `LifeSim.tsx`. There's no conflict resolution UI —
+  whichever save the pull finds (cloud if present, else local) becomes
+  authoritative for that device from then on.
 - **Marriage** (`src/ui/LifeSimSocial.tsx`, the "Marriage" tab in
   `LifeSim.tsx`, shown once signed in and age >= 18): real player-to-player,
-  not an NPC. `lifesimPresence/{uid}` (character name + age, separate from
-  the story-mode `presence` collection above) drives the "nearby players"
-  list; `marriageProposals/{id}` holds the propose/accept/decline flow.
-  Neither side ever writes the other's `users/{uid}` save document —
-  instead, once a proposal's `status` flips to `"accepted"`, **both**
-  clients independently observe that (their own `watchIncomingProposals`/
-  `watchOutgoingProposals` subscription sees it) and call `marry()` on
-  their own character, persisting it themselves. This is why `marry()` is
-  a plain local/pure function in `lifeSim.ts` with no Firestore call in
-  it. `firestore.rules` needs its own `lifesimPresence/{uid}` and
-  `marriageProposals/{id}` blocks (already in the repo's copy, needs
-  publishing same as every other collection here).
+  not an NPC. `lifesimPresence/{uid}` (character name + age) drives the
+  "nearby players" list; `marriageProposals/{id}` holds the propose/accept/
+  decline flow. Neither side ever writes the other's `users/{uid}` save
+  document — instead, once a proposal's `status` flips to `"accepted"`,
+  **both** clients independently observe that (their own
+  `watchIncomingProposals`/`watchOutgoingProposals` subscription sees it)
+  and call `marry()` on their own character, persisting it themselves.
+  This is why `marry()` is a plain local/pure function in `lifeSim.ts` with
+  no Firestore call in it. `firestore.rules` needs its own
+  `lifesimPresence/{uid}` and `marriageProposals/{id}` blocks (already in
+  the repo's copy, needs publishing same as every other collection here).
 - **Chat** (same `LifeSimSocial.tsx`): free-text, pairwise, any two
   players who can see each other in the nearby-players list (or a married
   spouse). `chatId` is a deterministic sort of the two uids
@@ -296,37 +189,15 @@ isn't set up" note in Settings / Lagos Life's intro screen).
 ## Repo layout
 
 ```
-chapters/*.ink              one Ink file per chapter (source of truth)
 firestore.rules             Firestore security rules (paste into Firebase console)
 .env.example                Firebase config var names (copy to .env / .env.production)
-scripts/compile-ink.mjs     compiles chapters/*.ink -> src/content/compiled/*.json
-scripts/smoke-lifesim.mjs   manual Playwright smoke test for Lagos Life mode
-src/engine/                 inkRunner (React hook wrapping inkjs), lifeSim (pure life-sim
-                             engine), firebase.ts (lazy-loaded Firebase SDK wrapper),
-                             authStore (sign-in state), profanityFilter, Zustand store, saves
-src/scenes/                 mini-scene React components (frying, change-making, ...)
-src/ui/                     map hub, RpgMap (chapter play screen), LifeSim (life-sim mode),
-                             LifeSimSocial (marriage + chat), AccountSection (sign-in/up/out
-                             widget), endings gallery, settings, etc.
-src/content/                chapter metadata (chapters.json), lifeEvents.ts (life-sim event
-                             pool), chores.ts, shop.ts, skills.ts, glossary.json, compiled
-                             ink JSON
-tests/                      Vitest engine tests (chapters + life sim) + a manual Playwright
-                             e2e smoke script for story mode
+scripts/smoke-lifesim.mjs   manual Playwright smoke test for the life sim
+src/engine/                 lifeSim (pure life-sim engine), firebase.ts (lazy-loaded
+                             Firebase SDK wrapper), authStore (sign-in state),
+                             profanityFilter
+src/ui/                     LifeSim (the whole game screen), LifeSimSocial (marriage +
+                             chat), AccountSection (sign-in/up/out widget), TitleScreen
+src/content/                lifeEvents.ts (life-sim event pool), chores.ts, shop.ts,
+                             skills.ts
+tests/                      Vitest engine tests + a manual Playwright smoke script
 ```
-
-## Adding a new chapter
-
-1. Write `chapters/0N-slug.ink` (see `01-the-grind.ink` for the tag
-   conventions: `# scene:`, `# ending_id:`, `# ending:`, `# verdict:`,
-   `# book_canon`).
-2. Run `npm run compile:ink` and fix any compiler errors/warnings.
-3. Add the chapter's entry to `src/content/chapters.json` (id must match
-   the ink filename without extension; endings array must match the
-   `ending_id` tags used).
-4. Add a hotspot map (location coordinates + a background image) for the
-   chapter's setting, and wire `# spot:`/`# stage:` tags accordingly. If
-   the chapter needs a mini-scene, add it to `src/scenes/` and wire the
-   tag name into the scene dispatch.
-5. Add a Vitest file under `tests/` that drives every ending to completion,
-   following `tests/the-grind.test.ts`.

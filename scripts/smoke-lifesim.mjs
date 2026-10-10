@@ -1,7 +1,7 @@
-// Manual smoke test for Lagos Life mode: confirms the title screen's two
-// modes both work, and that the life-sim loop (create -> age up -> handle
-// an event -> get a job -> eventually die -> start a new life) runs
-// end-to-end without errors.
+// Manual smoke test for Lagos Life mode: confirms the title screen works,
+// and that the life-sim loop (create -> age up -> handle an event -> get
+// a job -> eventually die -> start a new life) runs end-to-end without
+// errors.
 import { chromium } from "playwright";
 
 const baseUrl = process.env.E2E_URL || "http://127.0.0.1:4173/STORYTIME/";
@@ -25,9 +25,9 @@ await page.goto(baseUrl);
 await page.waitForSelector("text=I'm 16 or older");
 await page.click("text=I'm 16 or older");
 
-await page.waitForSelector("text=Live a Lagos life");
+await page.waitForSelector("text=Find Out What It Is About Lagos");
 await page.screenshot({ path: "/tmp/lifesim-01-title-modes.png" });
-await page.click("text=Live a Lagos life");
+await page.click("text=Find Out What It Is About Lagos");
 
 await page.waitForSelector("text=Begin life");
 await page.fill("#lifesim-name", "Adaeze");

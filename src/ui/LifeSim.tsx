@@ -15,6 +15,7 @@ import {
   migrateCharacter,
   pray,
   rollYearWork,
+  sellItem,
   pickChoreGameVariant,
   recordChoreGamePlayed,
   resolveChore,
@@ -64,6 +65,8 @@ import { LifeSimSocial } from "./LifeSimSocial";
 import { useLifeSimSocial, MIN_SOCIAL_AGE } from "./useLifeSimSocial";
 import { ChoreChallenge } from "./ChoreChallenge";
 import { Settings } from "./Settings";
+import { Inventory } from "./Inventory";
+import { zodiacFor } from "../engine/modifiers";
 
 // Realistic one-time bonus/penalty on top of the job itself — see
 // lifeEvents.ts's header comment for the real-Naira economy this plugs into.
@@ -204,6 +207,7 @@ export function LifeSim({ onExit }: Props) {
   const [showShop, setShowShop] = useState(false);
   const [shopCategory, setShopCategory] = useState<ShopCategory | null>(null);
   const [shopSearch, setShopSearch] = useState("");
+  const [shopView, setShopView] = useState<"browse" | "owned">("browse");
   const [showSkills, setShowSkills] = useState(false);
   const [showMarriage, setShowMarriage] = useState(false);
   const [showClassroom, setShowClassroom] = useState(false);
@@ -622,6 +626,7 @@ export function LifeSim({ onExit }: Props) {
         </button>
         <h1 className="story-screen__title">
           {character.name} · Age {character.age}
+          {zodiacFor(character.birthDate) ? ` · ${zodiacFor(character.birthDate)}` : ""}
         </h1>
       </header>
 
@@ -843,6 +848,27 @@ export function LifeSim({ onExit }: Props) {
       )}
 
       {showShop && (
+        <div className="lifesim-tabs">
+          <button
+            className={`lifesim-tab ${shopView === "browse" ? "lifesim-tab--active" : ""}`}
+            onClick={() => setShopView("browse")}
+          >
+            Browse
+          </button>
+          <button
+            className={`lifesim-tab ${shopView === "owned" ? "lifesim-tab--active" : ""}`}
+            onClick={() => setShopView("owned")}
+          >
+            My stuff
+          </button>
+        </div>
+      )}
+
+      {showShop && shopView === "owned" && (
+        <Inventory character={character} onSell={(item) => setCharacter(sellItem(character, item))} />
+      )}
+
+      {showShop && shopView === "browse" && (
         <div className="lifesim-shop">
           <div className="lifesim-shop__filters">
             {SHOP_CATEGORIES.map((cat) => (
@@ -865,7 +891,8 @@ export function LifeSim({ onExit }: Props) {
             <p className="lifesim-hint">No items match — try a different search or category.</p>
           ) : (
             shopItemsToShow.map((item) => {
-              const owned = character.inventory.includes(item.id);
+              const sold = (character.soldItemIds ?? []).includes(item.id);
+              const owned = character.inventory.includes(item.id) || sold;
               const afford = character.stats.naira >= item.price;
               return (
                 <div key={item.id} className="lifesim-shop__item">
@@ -878,7 +905,7 @@ export function LifeSim({ onExit }: Props) {
                     onClick={() => handleBuy(item)}
                     disabled={owned || !afford}
                   >
-                    {owned ? "Owned" : `₦${item.price.toLocaleString()}`}
+                    {owned ? (sold ? "Sold" : "Owned") : `₦${item.price.toLocaleString()}`}
                   </button>
                 </div>
               );

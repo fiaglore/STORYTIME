@@ -16,7 +16,7 @@ export type AgeBand = "infant" | "child" | "teen" | "adult";
 // Durable goods a character can own, persisted on LifeCharacter.assets.
 // Granted by resolving a choice with grantsAsset, checked by choices with
 // requiresAsset (e.g. you can't choose to run a generator you don't own).
-export type AssetId = "generator" | "pos-business" | "borehole";
+export type AssetId = "generator" | "pos-business" | "borehole" | "logistics-business";
 
 export interface StatDelta {
   happiness?: number;
@@ -948,6 +948,243 @@ export const LIFE_EVENTS: LifeEvent[] = [
         label: "Ask a trader at a stall to call for her",
         result: "He announces your name over his loudspeaker, and half the market cheers when she appears.",
         delta: { happiness: 1, smarts: 1 },
+      },
+    ],
+  },
+  {
+    id: "business-partnership",
+    bands: ["adult"],
+    prompt: "A well-connected acquaintance offers you a stake in a small logistics business — ₦2,000,000 for a share of a delivery fleet.",
+    choices: [
+      {
+        label: "Invest",
+        result: "Slow at first, then the delivery contracts start paying out.",
+        delta: { naira: -2000000, happiness: 2, smarts: 1 },
+        requiresNaira: 2000000,
+        grantsAsset: "logistics-business",
+      },
+      {
+        label: "Politely decline",
+        result: "You watch him sign someone else up by the end of the week.",
+        delta: { happiness: -1 },
+      },
+    ],
+  },
+  {
+    id: "tax-audit",
+    bands: ["adult"],
+    prompt: "A tax officer shows up with a letter about three years of your returns.",
+    choices: [
+      {
+        label: "Pay a tax consultant to handle it",
+        result: "Expensive, but the letter goes away.",
+        delta: { naira: -400000, happiness: -1 },
+        requiresNaira: 400000,
+      },
+      {
+        label: "Handle it yourself",
+        result: "Weeks of paperwork and bad coffee, but you learn more about tax than you wanted to.",
+        delta: { health: -2, happiness: -3, smarts: 2 },
+      },
+    ],
+  },
+  {
+    id: "kidnap-scare",
+    bands: ["adult"],
+    prompt: "A man in your circle was kidnapped for ransom last week. Your driver suggests varying your routes.",
+    choices: [
+      {
+        label: "Hire private security",
+        result: "Two quiet men in the car and your mind at ease.",
+        delta: { naira: -1500000, happiness: 1 },
+        requiresNaira: 1500000,
+      },
+      {
+        label: "Carry on as usual",
+        result: "Nothing happens, but you check the mirror more than you used to.",
+        delta: { happiness: -3 },
+        risk: {
+          chance: 0.08,
+          fatalShare: 0.25,
+          maimDelta: { health: -40, happiness: -15 },
+          maimResult: "Armed men box in your car one evening. You survive, but not unharmed.",
+          deathResult: "Armed men box in your car one evening. You are not seen again.",
+        },
+      },
+    ],
+  },
+  {
+    id: "charity-gala",
+    bands: ["adult"],
+    prompt: "You're invited to a charity gala where everyone knows exactly how much everyone else gives.",
+    choices: [
+      {
+        label: "Give big and be seen giving",
+        result: "Cameras flash. The cause genuinely benefits.",
+        delta: { naira: -750000, happiness: 4 },
+        requiresNaira: 750000,
+      },
+      {
+        label: "Give quietly",
+        result: "No photos, no pressure, but a few raised eyebrows.",
+        delta: { naira: -50000, happiness: 1 },
+      },
+    ],
+  },
+  {
+    id: "staff-fraud",
+    bands: ["adult"],
+    prompt: "Your driver has been padding the fuel receipts for months.",
+    choices: [
+      {
+        label: "Confront him and settle it quietly",
+        result: "He promises to do better. You keep an eye on the receipts.",
+        delta: { happiness: -1 },
+      },
+      {
+        label: "Sack him and hire someone new",
+        result: "Agency fees and a week of chaos, but the receipts add up now.",
+        delta: { naira: -80000, happiness: -2 },
+      },
+    ],
+  },
+  {
+    id: "island-party",
+    bands: ["adult"],
+    prompt: "A yacht party on the lagoon this weekend — guest list by invitation only.",
+    choices: [
+      {
+        label: "Attend",
+        result: "Music, skyline, and more small talk than you can count.",
+        delta: { naira: -250000, happiness: 5, looks: 1 },
+      },
+      {
+        label: "Decline politely",
+        result: "You stay in and sleep early, a little curious about what you missed.",
+        delta: { happiness: -1 },
+      },
+    ],
+  },
+  {
+    id: "ramadan-fast",
+    bands: ["adult", "teen"],
+    prompt: "Ramadan begins, and the days are long in the Lagos heat.",
+    choices: [
+      {
+        label: "Keep the full fast",
+        result: "Hungry and tired, but the evenings with family feel richer for it.",
+        delta: { health: -2, happiness: 3 },
+      },
+      {
+        label: "Fast on the days you can",
+        result: "You do what your body allows and make peace with the rest.",
+        delta: { happiness: 1 },
+      },
+    ],
+  },
+  {
+    id: "christmas-village-trip",
+    bands: ["adult", "teen"],
+    prompt: "December arrives, and the whole family is travelling to the village for Christmas.",
+    choices: [
+      {
+        label: "Make the trip",
+        result: "Hours on the road, but the jollof and the noise are worth every minute.",
+        delta: { naira: -35000, happiness: 4, health: -1 },
+        requiresNaira: 35000,
+      },
+      {
+        label: "Stay in Lagos this year",
+        result: "Quiet streets and a pang of missing out.",
+        delta: { happiness: -2 },
+      },
+    ],
+  },
+  {
+    id: "new-yam-festival",
+    bands: ["adult", "teen"],
+    prompt: "The new yam festival is back in your family's hometown, and the elders expect you to bring something for the feast.",
+    choices: [
+      {
+        label: "Bring yams and palm wine",
+        result: "The elders nod approval, and you eat until you can't move.",
+        delta: { naira: -12000, happiness: 3 },
+        requiresNaira: 12000,
+      },
+      {
+        label: "Send a message and some money instead",
+        result: "It's noted that you weren't there.",
+        delta: { naira: -5000, happiness: -1 },
+      },
+    ],
+  },
+  {
+    id: "faith-questions",
+    bands: ["adult"],
+    prompt: "At a family gathering, an aunty asks pointedly why she never sees you at any place of worship.",
+    choices: [
+      {
+        label: "Smile and change the subject",
+        result: "She lets it go — for now.",
+        delta: { happiness: -1 },
+      },
+      {
+        label: "Explain what you believe, calmly",
+        result: "A few raised eyebrows, one surprisingly good conversation.",
+        delta: { happiness: 1, smarts: 1 },
+      },
+    ],
+  },
+  {
+    id: "pos-float-shortage",
+    bands: ["adult"],
+    prompt: "A network failure leaves your POS float short after a long queue of customers.",
+    choices: [
+      {
+        label: "Top up the float from your own savings",
+        result: "Costly, but your regulars stay regulars.",
+        delta: { naira: -30000, happiness: -1 },
+        requiresNaira: 30000,
+      },
+      {
+        label: "Close early and apologize",
+        result: "Some customers grumble and walk to the next stand.",
+        delta: { happiness: -2 },
+      },
+    ],
+  },
+  {
+    id: "pos-reversal-dispute",
+    bands: ["adult"],
+    prompt: "A customer claims a transfer failed and demands a refund — the bank's records say otherwise.",
+    choices: [
+      {
+        label: "Refund him to keep the peace",
+        result: "Fifteen thousand lighter, and he never says thank you.",
+        delta: { naira: -15000, happiness: -1 },
+      },
+      {
+        label: "Show the receipt and hold your ground",
+        result: "A loud argument, a crowd, and eventually an apology you didn't need.",
+        delta: { happiness: -2, health: -1 },
+      },
+    ],
+  },
+  {
+    id: "logistics-truck-breakdown",
+    bands: ["adult"],
+    prompt: "One of your delivery trucks breaks down mid-route with a client's goods on board.",
+    choices: [
+      {
+        label: "Pay for emergency repairs",
+        result: "The truck is back on the road by evening, and the client never knows.",
+        delta: { naira: -120000, happiness: -1 },
+        requiresNaira: 120000,
+      },
+      {
+        label: "Hire another truck for the day",
+        result: "The delivery makes it, with a long phone call of apologies.",
+        delta: { naira: -40000, happiness: -1 },
       },
     ],
   },

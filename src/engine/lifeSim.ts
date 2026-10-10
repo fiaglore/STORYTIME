@@ -21,6 +21,18 @@ import { WEALTH_TIERS, type FaithId, type WealthTierId } from "../content/charac
 import { PRAYER_FLAVORS, randomFlavor } from "../content/prayers";
 import { SCHOOLS, schoolsAvailableTo, type School } from "../content/schools";
 import { randomClassroomLine, type ClassroomLine, type ClassroomNPC } from "../content/classroom";
+import { isEventAllowed } from "../content/eventRules";
+import { yearlyPassiveEffects } from "../content/ownership";
+import {
+  JOB_MIN_SMARTS,
+  applyChoreSkillPerks,
+  birthdayEffects,
+  hustleMultiplier,
+  laborFitnessBonus,
+  moodHealthDrift,
+  payMultiplier,
+  streakReward,
+} from "./modifiers";
 
 export type { AssetId };
 export { bandForAge };
@@ -161,6 +173,10 @@ export interface LifeCharacter {
   // ageUp pays pensionPerYear (drawn from pensionSavings) instead of job
   // income from then on.
   retired: boolean;
+  // Shop item ids this character has sold. A sold item can't be bought back
+  // (otherwise buy/sell/rebuy would farm its one-time stat boost). Optional so
+  // older saves load fine.
+  soldItemIds?: string[];
 }
 
 export interface LifeStage {
@@ -360,7 +376,7 @@ export function applyDelta(stats: LifeStats, delta: StatDelta): LifeStats {
 // remain; once all events in a band are exhausted, events there can repeat.
 export function pickEvent(character: LifeCharacter): LifeEvent | null {
   const band = bandForAge(character.age);
-  const pool = LIFE_EVENTS.filter((e) => e.bands.includes(band));
+  const pool = LIFE_EVENTS.filter((e) => e.bands.includes(band) && isEventAllowed(character, e));
   if (pool.length === 0) return null;
   const unseen = pool.filter((e) => !character.seenEventIds.includes(e.id));
   const choices = unseen.length > 0 ? unseen : pool;
@@ -400,7 +416,7 @@ function shuffled<T>(items: T[]): T[] {
 // year could draw the same event twice before any were played.
 export function pickEvents(character: LifeCharacter, count: number): LifeEvent[] {
   const band = bandForAge(character.age);
-  const pool = LIFE_EVENTS.filter((e) => e.bands.includes(band));
+  const pool = LIFE_EVENTS.filter((e) => e.bands.includes(band) && isEventAllowed(character, e));
   const unseen = pool.filter((e) => !character.seenEventIds.includes(e.id));
   const seen = pool.filter((e) => character.seenEventIds.includes(e.id));
   return [...shuffled(unseen), ...shuffled(seen)].slice(0, Math.max(0, count));
@@ -437,14 +453,19 @@ export function checkDeath(character: LifeCharacter): string | null {
 export function ageUp(character: LifeCharacter): LifeCharacter {
   if (!character.alive) return character;
   const nextAge = character.age + 1;
-  const jobPay = jobIncome(character.job);
+  const passive = yearlyPassiveEffects(character, nextAge);
+  // Smarts scale pay (see payMultiplier); owned assets and property add
+  // passive income on top (see passive above), independent of job/
+  // retirement status.
+  const jobPay = Math.round(jobIncome(character.job) * payMultiplier(character));
+  const birthday = birthdayEffects(character.birthDate, nextAge);
   // Retired: income is this year's pension draw (capped at what's left in
   // the pot, not pensionPerYear itself — the pot can run out before the
   // character does); still working: pensionSavings grows by a cut of this
-  // year's pay instead. The two are mutually exclusive since retire()
-  // forces job to "none".
+  // year's (smarts-scaled) pay instead. The two are mutually exclusive
+  // since retire() forces job to "none".
   const pensionPayout = character.retired ? Math.min(character.pensionPerYear, character.pensionSavings) : 0;
-  const income = character.retired ? pensionPayout : jobPay;
+  const income = (character.retired ? pensionPayout : jobPay) + passive.naira;
   const pensionSavings = character.retired
     ? character.pensionSavings - pensionPayout
     : character.pensionSavings + Math.round(jobPay * PENSION_CONTRIBUTION_RATE);
@@ -458,10 +479,15 @@ export function ageUp(character: LifeCharacter): LifeCharacter {
       : {};
   const prevNaira = character.stats.naira;
   const stats = applyDelta(character.stats, {
-    health: randomInt(-2, 1) - Math.max(0, Math.floor((nextAge - 60) / 10)),
-    happiness: randomInt(-1, 1) + (schoolDelta.happiness ?? 0),
+    health:
+      randomInt(-2, 1) -
+      Math.max(0, Math.floor((nextAge - 60) / 10)) +
+      moodHealthDrift(character) +
+      passive.health +
+      laborFitnessBonus(character),
+    happiness: randomInt(-1, 1) + (schoolDelta.happiness ?? 0) + passive.happiness + birthday.happiness,
     naira: income + (schoolDelta.naira ?? 0),
-    smarts: schoolDelta.smarts ?? 0,
+    smarts: (schoolDelta.smarts ?? 0) + passive.smarts,
   });
 
   // The school fee (if any) is this year's first spend, same as job
@@ -483,14 +509,20 @@ export function ageUp(character: LifeCharacter): LifeCharacter {
     prayersThisYear: 0,
     ateThisYear: false,
     classroomTalksThisYear: 0,
+    log: [...character.log, ...birthday.log, ...passive.log],
   };
-  // One-time flavor line the year the pot actually empties, not every
-  // year after — real pension-delay/exhaustion precarity, not spam.
+  // One-time flavor line the year the pension pot actually empties, not
+  // every year after — real pension-delay/exhaustion precarity, not spam.
   if (character.retired && character.pensionSavings > 0 && pensionSavings <= 0) {
     next.log = [
       ...next.log,
       `Age ${nextAge}: Your pension savings have run dry — you're on your own now.`,
     ];
+  }
+  const reward = streakReward(next.streak);
+  if (reward) {
+    next.stats = applyDelta(next.stats, reward.delta);
+    next.log = [...next.log, `Age ${nextAge}: ${reward.text}`];
   }
   const cause = checkDeath(next);
   if (cause) {
@@ -647,7 +679,8 @@ export function recordChoreGamePlayed(
 
 export function resolveChore(character: LifeCharacter, chore: Chore, passed = true): LifeCharacter {
   const prevNaira = character.stats.naira;
-  const delta = passed ? chore.delta : { ...chore.delta, happiness: (chore.delta.happiness ?? 0) - 3 };
+  const perked = applyChoreSkillPerks(character.choreSkills, chore.category, chore.delta);
+  const delta = passed ? perked : { ...perked, happiness: (perked.happiness ?? 0) - 3 };
   const stats = applyDelta(character.stats, delta);
   const prevLevel = character.choreSkills[chore.category];
   const gain = passed ? randomInt(4, 10) : 0;
@@ -669,6 +702,7 @@ export function resolveChore(character: LifeCharacter, chore: Chore, passed = tr
 
 function isJobAvailable(character: LifeCharacter, job: Job): boolean {
   if (character.age < job.minAge) return false;
+  if (character.stats.smarts < (JOB_MIN_SMARTS[job.id] ?? 0)) return false;
   if (job.requiresSkill && (character.skills[job.requiresSkill.skill] ?? 0) < job.requiresSkill.level) return false;
   return true;
 }
@@ -743,7 +777,13 @@ export function retire(character: LifeCharacter): LifeCharacter {
 // satisfiable through the shop like any other naira-moving action.
 export function buyItem(character: LifeCharacter, item: ShopItem): LifeCharacter {
   const isFood = item.category === "food";
-  if ((!isFood && character.inventory.includes(item.id)) || character.stats.naira < item.price) return character;
+  if (
+    (!isFood && character.inventory.includes(item.id)) ||
+    (character.soldItemIds ?? []).includes(item.id) ||
+    character.stats.naira < item.price
+  ) {
+    return character;
+  }
   const prevNaira = character.stats.naira;
   const stats = applyDelta(character.stats, { ...item.delta, naira: -item.price });
   return {
@@ -753,6 +793,25 @@ export function buyItem(character: LifeCharacter, item: ShopItem): LifeCharacter
     inventory: isFood || character.inventory.includes(item.id) ? character.inventory : [...character.inventory, item.id],
     ateThisYear: isFood ? true : character.ateThisYear,
     log: [...character.log, `Age ${character.age}: Bought a ${item.name.toLowerCase()}.`],
+  };
+}
+
+// What a sold item fetches, as a fraction of its price (depreciation).
+export const SELL_RATE = 0.5;
+
+// Sells an owned shop item for SELL_RATE of its price. The one-time stat
+// boost it gave stays. Deliberately NOT counted as earned for the year, so
+// flipping items can't be used to skip Age Up's earn requirement, and the
+// item can't be bought back (see soldItemIds).
+export function sellItem(character: LifeCharacter, item: ShopItem): LifeCharacter {
+  if (!character.inventory.includes(item.id)) return character;
+  const refund = Math.floor(item.price * SELL_RATE);
+  return {
+    ...character,
+    stats: applyDelta(character.stats, { naira: refund }),
+    inventory: character.inventory.filter((id) => id !== item.id),
+    soldItemIds: [...(character.soldItemIds ?? []), item.id],
+    log: [...character.log, `Age ${character.age}: Sold a ${item.name.toLowerCase()} for ₦${refund.toLocaleString()}.`],
   };
 }
 
@@ -787,7 +846,7 @@ export const MAX_HUSTLES_PER_YEAR = 3;
 export function hustle(character: LifeCharacter): LifeCharacter {
   if (character.hustlesThisYear >= MAX_HUSTLES_PER_YEAR) return character;
   const prevNaira = character.stats.naira;
-  const gain = randomInt(1200, 2800);
+  const gain = Math.round(randomInt(1200, 2800) * hustleMultiplier(character));
   const stats = applyDelta(character.stats, { naira: gain, health: -1 });
   return {
     ...character,

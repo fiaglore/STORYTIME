@@ -1,6 +1,7 @@
 import { bandForAge, type AgeBand, type AssetId, type StatDelta } from "./lifeEvents";
 import { SHOP_ITEMS } from "./shop";
 import type { LifeCharacter } from "../engine/lifeSim";
+import { choreAllowedByOwnership } from "./ownership";
 
 // Whether the character owns any shop item from the "vehicles" category —
 // "a car to go around with" per the design ask. Checked against
@@ -112,5 +113,6 @@ function isChoreRelevant(chore: Chore, character: LifeCharacter, band: AgeBand):
   if (chore.requiresAsset && !character.assets.includes(chore.requiresAsset)) return false;
   if (chore.excludesAsset && character.assets.includes(chore.excludesAsset)) return false;
   if (chore.excludesVehicle && ownsVehicle(character)) return false;
+  if (!choreAllowedByOwnership(chore.id, character)) return false;
   return true;
 }

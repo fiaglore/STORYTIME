@@ -297,6 +297,57 @@ the single surviving mode, `src/ui/LifeSim.tsx`.
   caller skips the UI's filtering" principle as `resolveEvent`/
   `isChoiceAvailable` — the Jobs tab itself is hidden once retired since
   there's nothing left to do there.
+- Smarts/looks/happiness, owned assets/items, and chore mastery all
+  change gameplay now, not just the stat numbers themselves —
+  `src/engine/modifiers.ts` and `src/content/ownership.ts` hold the pure
+  rules, `src/content/eventRules.ts` gates which life events can even
+  fire:
+  - **Pay**: `payMultiplier`/`hustleMultiplier` scale job income and
+    `hustle()` by smarts/looks (0.8-1.2x and 0.9-1.1x) — the hustle floor
+    stays intact at the 0.9x worst case (3 x 1,200 x 0.9 = 3,240 still
+    clears the adult band's 3,000 minEarn; `tests/systems.test.ts` reruns
+    the same 50-trial regression at `looks: 0`). `JOB_MIN_SMARTS` adds a
+    smarts floor to `civil-servant`/`tech` on top of their existing skill
+    requirement.
+  - **Health/happiness**: `moodHealthDrift` costs health at rock-bottom
+    happiness and protects it at genuinely high happiness;
+    `laborFitnessBonus` rewards a maxed labor chore skill; `streakReward`
+    pays out every 5th consecutive healthy year (`LifeCharacter.streak`).
+  - **Ownership pays off and removes struggles it solves**:
+    `yearlyPassiveEffects` (called from `ageUp`, folded into `income`
+    alongside job pay) gives `ASSET_INCOME` for durable assets
+    (`pos-business`/`borehole`/the new `logistics-business`) and a
+    yield-rate cut of price for rentable shop items (a `shop-space`,
+    `land-plot`, `keke`, ...); `ITEM_PERKS` also gives small
+    health/smarts/happiness bumps for owning things like a `laptop` or
+    `gym-membership`, once per product line regardless of how many brand
+    tiers of it you own. `owns(character, "car" | "home")` checks
+    `inventory` against `ownership.ts`'s `GROUP_LINES`, and both
+    `choreAllowedByOwnership` (chores — `commute`/`keke-squeeze`/
+    `brt-queue` for cars, `call-landlord`/`sweep-compound` for homes) and
+    `eventRules.ts`'s `excludesOwned`/`requiresOwned` (events — e.g.
+    `landlord-rent` stops once you own a home, `armed-robbery` only fires
+    if you own a car to be robbed in) stop offering the struggle a
+    character has already bought their way out of.
+  - **Event filtering**: `isEventAllowed` (called from both `pickEvent`
+    and `pickEvents`) gates events by current naira (`minNaira`/
+    `maxNaira`, e.g. a ₦50M character never sees `danfo-dispute`), faith,
+    job, assets, ownership, and marital status — every key in
+    `EVENT_RULES` must name a real `LIFE_EVENTS` id (tested). An event
+    with no rule is open to everyone, same as before.
+  - **Selling**: `sellItem`/`SELL_RATE` (50%) lets a character cash an
+    owned shop item back in — the Shop tab's "My stuff" sub-tab
+    (`src/ui/Inventory.tsx`) lists owned items/assets with their perks
+    and a Sell button. A sold item's one-time stat boost stays, selling
+    doesn't count as `earnedThisYear` (so flipping items can't be used to
+    clear Age Up's earn requirement), and `LifeCharacter.soldItemIds`
+    blocks rebuying it — otherwise buy→sell→rebuy would farm the same
+    item's stat boost over and over.
+  - **Birthdays/zodiac**: `birthdayEffects` gives every birthday a small
+    happiness bump and logs a line on milestone ages (1, 5, 10, 13, 16,
+    18, 21, 30, 40, 50, 60, 70, 80); `zodiacFor` derives a sign from
+    `birthDate` and both the 1st/21st-birthday log lines and the main
+    screen's title (`{name} · Age {age} · {sign}`) show it.
 - Run `npm test` and `npm run build` before finishing any task.
 
 - `src/ui/Settings.tsx` is one of the tabs in `LifeSim.tsx` (alongside

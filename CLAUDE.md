@@ -20,14 +20,20 @@ the single surviving mode, `src/ui/LifeSim.tsx`.
 ## Rules
 
 - Character creation (`src/ui/LifeSim.tsx`'s `!character` screen) is a
-  multi-step flow: name → date of birth → faith → three random "important
-  questions" from `src/content/characterCreation.ts`'s `CREATION_QUESTIONS`
-  pool → a reveal screen. `rollWealthTier` in `lifeSim.ts` sums the three
-  answers' scores plus a random nudge and maps the total onto
-  `WEALTH_TIERS` (shepeteri → famous, ordered low to high) to pick both the
-  Lagos-slang tier label and a concrete one-time inheritance amount inside
-  that tier's naira range — "assigned randomly from the information
-  gathered at sign in" per the design ask, not a deterministic lookup.
+  multi-step flow: **auth** → name → date of birth → faith → three random
+  questions → a reveal screen. The auth step comes first and is mandatory
+  whenever cloud save is configured (`authEnabled`) — the `creationStep`
+  effect auto-advances past it the moment `authStatus` is `"signed-in"`,
+  or immediately if `!authEnabled` (nothing to sign into, so there's no
+  gate to show). `pickCreationQuestions(3)` draws from
+  `src/content/characterCreation.ts`'s `CREATION_QUESTIONS` pool — these
+  are deliberately unrelated to wealth (birth day, lucky number, sleep
+  habits, spirit animal, favorite color), per the design ask that the
+  wealth tier feel like a dice roll, not a reflection of the player's
+  answers. `rollWealthTier` in `lifeSim.ts` sums the three answers' scores
+  plus a random nudge and maps the total onto `WEALTH_TIERS` (shepeteri →
+  famous, ordered low to high) to pick both the Lagos-slang tier label and
+  a concrete one-time inheritance amount inside that tier's naira range.
   `createCharacter` takes this (plus name/birthDate/faith) as an options
   object now, not just a name string — everybody still starts at the same
   base stats (happiness/health/smarts/looks roll the same ranges
@@ -166,20 +172,31 @@ the single surviving mode, `src/ui/LifeSim.tsx`.
   `CHORES_PER_YEAR` if an age band needs more variety, so the friction
   doesn't come from repeating the same 2-3 chores over and over.
 - Each chore belongs to one of three `ChoreCategory`s (`labor` / `errands`
-  / `finance`) and, before `resolveChore` applies its delta, the player
-  plays that category's mini-challenge (`src/ui/ChoreChallenge.tsx`):
-  `labor` is a timing game (stop a sweeping marker in a zone, same shape
-  as `JobInterviewGame`), `errands` is a memorize-then-repeat icon
-  sequence, `finance` is a change-counting question against a countdown.
-  Passing grants the chore's full delta plus 4-10 points of that
-  category's skill (`LifeCharacter.choreSkills`, 0-100, logged as a
-  level-up line every 10-point boundary crossed); failing still clears
-  the chore (so one bad round at a mini-game can never stall a year
-  forever) but applies a worse outcome (an extra happiness hit, via
-  `resolveChore`'s `passed` flag) and no skill gain. Each challenge gets
-  harder as its category's level rises (narrower timing zone, longer
-  sequence, shorter countdown) — leveling up is never meant to trivialize
-  the "hard challenge to pass" the design calls for.
+  / `finance`), each with **two** mini-game variants
+  (`VARIANTS_BY_CATEGORY` in `content/chores.ts`; `src/ui/
+  ChoreChallenge.tsx` renders all six): `labor` gets a timing game (stop a
+  sweeping marker in a zone) or a tap-rhythm game (stop a count on a
+  target number); `errands` gets a memorize-then-repeat icon sequence or
+  a spot-the-odd-one-out grid; `finance` gets a change-counting question
+  or a cheapest-of-three pick, both against a countdown. Which variant a
+  given chore instance gets is `pickChoreGameVariant` in `lifeSim.ts`: if
+  that specific chore (by id) was last played within
+  `GAME_REPEAT_COOLDOWN_YEARS` (3), the *other* variant is preferred —
+  "don't repeat games in 3 years" — tracked per chore id in
+  `LifeCharacter.choreGameHistory`, written by `recordChoreGamePlayed` on
+  every attempt (pass or fail), not just a successful one.
+  **Passing is mandatory to age up** — a failed round no longer clears
+  the chore; `LifeSim.tsx`'s `pendingChores` only drops an entry once
+  `resolveChore` is called with `passed: true`, and `handleAgeUp` already
+  refuses while `pendingChores.length > 0`. A fresh retry re-rolls the
+  variant (almost certainly the other one, per the cooldown) rather than
+  replaying the one that just failed. Passing grants the chore's full
+  delta plus 4-10 points of that category's skill (`LifeCharacter.
+  choreSkills`, 0-100, logged as a level-up line every 10-point boundary
+  crossed). Each challenge gets harder as its category's level rises
+  (narrower timing zone, longer sequence, shorter countdown) — leveling
+  up is never meant to trivialize the "hard challenge to pass" the design
+  calls for.
 - `pickChores` filters on more than age band — a chore that assumes a
   specific economic reality (`maxNaira`: queuing to charge your phone
   implies no power at home; `minNaira`: having a driver to settle disputes

@@ -1,8 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import type { ChoreCategory } from "../content/chores";
+import type { ChoreGameVariant } from "../content/chores";
 
+// Six mini-games, two per ChoreCategory (see VARIANTS_BY_CATEGORY in
+// content/chores.ts) — which one a given chore instance gets is decided
+// by the caller (lifeSim.ts's pickChoreGameVariant), not here.
 interface Props {
-  category: ChoreCategory;
+  variant: ChoreGameVariant;
   // 0-100 chore-category skill level — challenges get harder (narrower
   // timing zone, longer sequence, shorter countdown) as this rises, so
   // getting better at a category never trivializes the "hard challenge to
@@ -11,16 +14,13 @@ interface Props {
   onComplete: (passed: boolean) => void;
 }
 
-// Three distinct mini-challenges, one per ChoreCategory — "labor" (fetch
-// water, sweep, laundry, queues) gets a timing challenge, "errands"
-// (calls, shopping, data top-up) gets a memory/sequence challenge, and
-// "finance" (market money, bank queue, settling staff) gets a quick-math
-// change challenge. Each renders completely differently but all end the
-// same way: one onComplete(passed) call.
-export function ChoreChallenge({ category, level, onComplete }: Props) {
-  if (category === "labor") return <TimingChallenge level={level} onComplete={onComplete} />;
-  if (category === "errands") return <SequenceChallenge level={level} onComplete={onComplete} />;
-  return <MathChallenge level={level} onComplete={onComplete} />;
+export function ChoreChallenge({ variant, level, onComplete }: Props) {
+  if (variant === "timing") return <TimingChallenge level={level} onComplete={onComplete} />;
+  if (variant === "tap-rhythm") return <TapRhythmChallenge level={level} onComplete={onComplete} />;
+  if (variant === "sequence") return <SequenceChallenge level={level} onComplete={onComplete} />;
+  if (variant === "odd-one-out") return <OddOneOutChallenge level={level} onComplete={onComplete} />;
+  if (variant === "math") return <MathChallenge level={level} onComplete={onComplete} />;
+  return <PriceCompareChallenge level={level} onComplete={onComplete} />;
 }
 
 // --- labor: stop the sweeping marker inside the zone (same shape as
@@ -191,6 +191,162 @@ function MathChallenge({ level, onComplete }: { level: number; onComplete: (pass
             : answered.value === -1
               ? "Too slow — the customer walked off annoyed."
               : "Wrong change — the customer isn't happy."}
+        </p>
+      )}
+    </div>
+  );
+}
+
+// --- labor variant 2: stop a steadily-ticking count on the target number
+// shown — a rhythm/timing game that's nothing like the sweeping-marker one.
+function TapRhythmChallenge({ level, onComplete }: { level: number; onComplete: (passed: boolean) => void }) {
+  const [target] = useState(() => 4 + Math.floor(Math.random() * 4));
+  const cadenceMs = Math.max(260, 480 - Math.round((level / 100) * 220));
+  const [count, setCount] = useState(1);
+  const [stopped, setStopped] = useState<{ value: number; passed: boolean } | null>(null);
+
+  useEffect(() => {
+    if (stopped) return;
+    const t = window.setInterval(() => setCount((c) => (c >= 12 ? 1 : c + 1)), cadenceMs);
+    return () => window.clearInterval(t);
+  }, [cadenceMs, stopped]);
+
+  const handleStop = () => {
+    if (stopped) return;
+    setStopped({ value: count, passed: count === target });
+    window.setTimeout(() => onComplete(count === target), 700);
+  };
+
+  return (
+    <div className="mini-scene">
+      <p className="mini-scene__prompt">Tap Stop exactly when the count reaches {target}.</p>
+      <p className="lifesim-reveal__tier">{stopped ? stopped.value : count}</p>
+      {stopped ? (
+        <p className={`mini-scene__feedback interview-feedback--${stopped.passed ? "great" : "miss"}`}>
+          {stopped.passed ? "Right on the beat." : `Off by ${Math.abs(stopped.value - target)} — not quite.`}
+        </p>
+      ) : (
+        <button className="choice-button choice-button--scene" onClick={handleStop}>
+          Stop!
+        </button>
+      )}
+    </div>
+  );
+}
+
+// --- errands variant 2: spot the one icon that doesn't match the rest.
+const ODD_ICON_SETS: [string, string][] = [
+  ["🍅", "🍎"],
+  ["🧅", "🧄"],
+  ["🥔", "🥚"],
+  ["🧃", "🧴"],
+  ["📱", "📲"],
+];
+
+function OddOneOutChallenge({ level, onComplete }: { level: number; onComplete: (passed: boolean) => void }) {
+  const gridSize = Math.min(12, 6 + Math.floor(level / 25) * 2);
+  const seconds = Math.max(3, 6 - Math.floor(level / 34));
+  const [setup] = useState(() => {
+    const [common, odd] = ODD_ICON_SETS[Math.floor(Math.random() * ODD_ICON_SETS.length)];
+    const oddIndex = Math.floor(Math.random() * gridSize);
+    return { common, odd, oddIndex };
+  });
+  const [timeLeft, setTimeLeft] = useState(seconds);
+  const [answered, setAnswered] = useState<{ index: number; passed: boolean } | null>(null);
+
+  useEffect(() => {
+    if (answered) return;
+    if (timeLeft <= 0) {
+      setAnswered({ index: -1, passed: false });
+      window.setTimeout(() => onComplete(false), 700);
+      return;
+    }
+    const t = window.setTimeout(() => setTimeLeft((s) => s - 1), 1000);
+    return () => window.clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [timeLeft, answered]);
+
+  const handlePick = (index: number) => {
+    if (answered) return;
+    const passed = index === setup.oddIndex;
+    setAnswered({ index, passed });
+    window.setTimeout(() => onComplete(passed), 700);
+  };
+
+  return (
+    <div className="mini-scene">
+      <p className="mini-scene__prompt">Spot the odd one out. ({timeLeft}s)</p>
+      <div className="mini-scene__pans">
+        {Array.from({ length: gridSize }, (_, i) => (
+          <button
+            key={i}
+            className={`change-pill ${answered?.index === i ? "change-pill--picked" : ""}`}
+            onClick={() => handlePick(i)}
+            disabled={!!answered}
+          >
+            {i === setup.oddIndex ? setup.odd : setup.common}
+          </button>
+        ))}
+      </div>
+      {answered && (
+        <p className={`mini-scene__feedback interview-feedback--${answered.passed ? "great" : "miss"}`}>
+          {answered.passed ? "Spotted it." : "Not the right one."}
+        </p>
+      )}
+    </div>
+  );
+}
+
+// --- finance variant 2: pick the cheapest of three priced items under a
+// countdown — a different money-judgment skill than counting exact change.
+function PriceCompareChallenge({ level, onComplete }: { level: number; onComplete: (passed: boolean) => void }) {
+  const [options] = useState(() => {
+    const prices = new Set<number>();
+    while (prices.size < 3) prices.add((2 + Math.floor(Math.random() * 38)) * 50);
+    return [...prices];
+  });
+  const cheapest = Math.min(...options);
+  const seconds = Math.max(3, 6 - Math.floor(level / 34));
+  const [timeLeft, setTimeLeft] = useState(seconds);
+  const [answered, setAnswered] = useState<{ value: number; passed: boolean } | null>(null);
+
+  useEffect(() => {
+    if (answered) return;
+    if (timeLeft <= 0) {
+      setAnswered({ value: -1, passed: false });
+      window.setTimeout(() => onComplete(false), 700);
+      return;
+    }
+    const t = window.setTimeout(() => setTimeLeft((s) => s - 1), 1000);
+    return () => window.clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [timeLeft, answered]);
+
+  const handlePick = (value: number) => {
+    if (answered) return;
+    const passed = value === cheapest;
+    setAnswered({ value, passed });
+    window.setTimeout(() => onComplete(passed), 700);
+  };
+
+  return (
+    <div className="mini-scene">
+      <p className="mini-scene__prompt">Pick the cheapest one before the seller moves on. ({timeLeft}s)</p>
+      <div className="mini-scene__change-options">
+        {options.map((opt) => (
+          <button
+            key={opt}
+            className={`change-pill ${answered?.value === opt ? "change-pill--picked" : ""}`}
+            onClick={() => handlePick(opt)}
+            disabled={!!answered}
+          >
+            ₦{opt.toLocaleString()}
+          </button>
+        ))}
+      </div>
+      {answered && (
+        <p className={`mini-scene__feedback interview-feedback--${answered.passed ? "great" : "miss"}`}>
+          {answered.passed ? "Good eye for a deal." : "Not the cheapest — you overpaid."}
         </p>
       )}
     </div>

@@ -14,8 +14,10 @@ import {
   marry,
   meetsAgeUpRequirements,
   maxSendable,
+  pickChoreGameVariant,
   pray,
   receiveMoney,
+  recordChoreGamePlayed,
   resolveChore,
   resolveEvent,
   reviveCharacter,
@@ -67,6 +69,7 @@ function baseCharacter(overrides: Partial<LifeCharacter> = {}): LifeCharacter {
     choreSkills: { labor: 0, errands: 0, finance: 0 },
     sentTransfers: [],
     schoolId: null,
+    choreGameHistory: {},
     ...overrides,
   };
 }
@@ -541,6 +544,32 @@ describe("rollWealthTier", () => {
       if (tier === "famous") sawFamous = true;
     }
     expect(sawFamous).toBe(true);
+  });
+});
+
+describe("pickChoreGameVariant / recordChoreGamePlayed", () => {
+  it("avoids repeating the same game within the cooldown window", () => {
+    const chore = CHORES.find((c) => c.id === "market-run")!; // finance category
+    let c = baseCharacter({ age: 20 });
+    const first = pickChoreGameVariant(c, chore);
+    c = recordChoreGamePlayed(c, chore.id, first);
+    for (let i = 0; i < 20; i++) {
+      const next = pickChoreGameVariant(c, chore);
+      expect(next).not.toBe(first);
+    }
+  });
+
+  it("allows repeating the same game once the cooldown has passed", () => {
+    const chore = CHORES.find((c) => c.id === "market-run")!;
+    const c = baseCharacter({
+      age: 25,
+      choreGameHistory: { [chore.id]: { variant: "math", age: 20 } }, // 5 years ago
+    });
+    let sawRepeat = false;
+    for (let i = 0; i < 30; i++) {
+      if (pickChoreGameVariant(c, chore) === "math") sawRepeat = true;
+    }
+    expect(sawRepeat).toBe(true);
   });
 });
 

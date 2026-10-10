@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ageUp,
   applyDelta,
@@ -14,6 +14,8 @@ import {
   meetsAgeUpRequirements,
   pickEvent,
   pray,
+  pickChoreGameVariant,
+  recordChoreGamePlayed,
   resolveChore,
   resolveEvent,
   reviveCharacter,
@@ -34,7 +36,7 @@ import {
   type FaithId,
 } from "../engine/lifeSim";
 import type { LifeEvent } from "../content/lifeEvents";
-import { pickChores, type Chore } from "../content/chores";
+import { pickChores, type Chore, type ChoreGameVariant } from "../content/chores";
 import { SHOP_CATEGORIES, SHOP_ITEMS, type ShopCategory, type ShopItem } from "../content/shop";
 import { SKILLS, SKILL_TRAIN_COST, type Skill } from "../content/skills";
 import { schoolsAvailableTo, type School } from "../content/schools";
@@ -118,12 +120,12 @@ const STAT_LABELS: { key: keyof LifeCharacter["stats"]; label: string; isNaira?:
   { key: "looks", label: "Looks" },
 ];
 
-type CreationStep = "name" | "dob" | "faith" | "questions" | "reveal";
+type CreationStep = "auth" | "name" | "dob" | "faith" | "questions" | "reveal";
 
 export function LifeSim({ onExit }: Props) {
   const [character, setCharacter] = useState<LifeCharacter | null>(() => loadSaved());
   const [nameInput, setNameInput] = useState("");
-  const [creationStep, setCreationStep] = useState<CreationStep>("name");
+  const [creationStep, setCreationStep] = useState<CreationStep>("auth");
   const [birthDateInput, setBirthDateInput] = useState("");
   const [faithInput, setFaithInput] = useState<FaithId | null>(null);
   const [creationQuestions] = useState<CreationQuestion[]>(() => pickCreationQuestions(3));
@@ -147,9 +149,39 @@ export function LifeSim({ onExit }: Props) {
     const saved = loadSaved();
     return saved && saved.alive && saved.age > AGE_SCHOOL_CHOICE_CUTOFF ? pickChores(saved, CHORES_PER_YEAR) : [];
   });
+  const [choreAttempt, setChoreAttempt] = useState(0);
   const uid = useAuthStore((s) => s.user?.uid);
+  const authEnabled = useAuthStore((s) => s.enabled);
+  const authStatus = useAuthStore((s) => s.status);
+  const authInit = useAuthStore((s) => s.init);
+
+  useEffect(() => {
+    authInit();
+  }, [authInit]);
+
+  // The login/create-account step comes before character creation — once
+  // signed in (or cloud save isn't configured for this deployment at
+  // all, so there's nothing to sign into), move straight on to naming a
+  // character. Only relevant while there's no character yet; a returning
+  // signed-in player's cloud save is pulled in separately (see the
+  // pulledForUid effect below) and bypasses creation entirely.
+  useEffect(() => {
+    if (creationStep !== "auth") return;
+    if (!authEnabled || authStatus === "signed-in") setCreationStep("name");
+  }, [creationStep, authEnabled, authStatus]);
   const pulledForUid = useRef<string | null>(null);
   const statEvents = useStatDeltas(character ? { ...character.stats } : {});
+
+  // Rolled once per round shown (recomputing on every character update
+  // while the same chore/attempt is pending would churn the game
+  // mid-round) — see pickChoreGameVariant's "don't repeat in 3 years"
+  // rule in lifeSim.ts.
+  const currentChoreId = pendingChores[0]?.id;
+  const currentChoreVariant = useMemo(() => {
+    if (!character || !pendingChores[0]) return null;
+    return pickChoreGameVariant(character, pendingChores[0]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentChoreId, choreAttempt]);
 
   useEffect(() => {
     persist(character, uid);
@@ -194,10 +226,24 @@ export function LifeSim({ onExit }: Props) {
     setPendingChores([]);
   };
 
-  const handleChoreChallengeComplete = (chore: Chore, passed: boolean) => {
+  // Failing a chore's challenge no longer clears it — the player must
+  // pass to age up. choreAttempt forces ChoreChallenge to remount (fresh
+  // round) on a retry, since otherwise its internal "answered"/"stopped"
+  // state wouldn't reset on its own with the same chore still pending.
+  // Every attempt (pass or fail) records which game variant just played,
+  // so a retry's re-rolled variant (see currentChoreVariant) reliably
+  // avoids repeating the one that just failed.
+  const handleChoreChallengeComplete = (chore: Chore, variant: ChoreGameVariant, passed: boolean) => {
     if (!character) return;
-    setCharacter(resolveChore(character, chore, passed));
+    const played = recordChoreGamePlayed(character, chore.id, variant);
+    if (!passed) {
+      setCharacter(played);
+      setChoreAttempt((n) => n + 1);
+      return;
+    }
+    setCharacter(resolveChore(played, chore, true));
     setPendingChores((cs) => cs.filter((c) => c.id !== chore.id));
+    setChoreAttempt(0);
   };
 
   const handleBuy = (item: ShopItem) => {
@@ -287,7 +333,9 @@ export function LifeSim({ onExit }: Props) {
   const startNewLife = () => {
     setCharacter(null);
     setNameInput("");
-    setCreationStep("name");
+    // Signed-in players skip straight past this (see the creationStep
+    // effect above); it only actually shows for a signed-out player.
+    setCreationStep("auth");
     setBirthDateInput("");
     setFaithInput(null);
     setAnswerScores([]);
@@ -312,10 +360,22 @@ export function LifeSim({ onExit }: Props) {
           <h1 className="story-screen__title">Lagos Life</h1>
         </header>
         <div className="lifesim-intro">
-          <p className="lifesim-intro__tagline">
-            Born in Lagos. One life, played year by year — school, hustle, family, and
-            whatever the city throws at you.
-          </p>
+          {creationStep === "auth" ? (
+            <>
+              <p className="lifesim-intro__tagline">
+                Sign in or create an account before you start — your life syncs to it from here.
+              </p>
+              <AccountSection />
+              {!authEnabled && (
+                <p className="lifesim-hint">Cloud save isn't set up for this deployment — continuing locally.</p>
+              )}
+            </>
+          ) : (
+            <p className="lifesim-intro__tagline">
+              Born in Lagos. One life, played year by year — school, hustle, family, and
+              whatever the city throws at you.
+            </p>
+          )}
 
           {creationStep === "name" && (
             <>
@@ -415,10 +475,6 @@ export function LifeSim({ onExit }: Props) {
             </>
           )}
         </div>
-        <section className="settings-screen__section">
-          <h2>Account & cloud sync</h2>
-          <AccountSection />
-        </section>
       </div>
     );
   }
@@ -809,12 +865,15 @@ export function LifeSim({ onExit }: Props) {
             Before you can age up — {pendingChores.length} thing{pendingChores.length > 1 ? "s" : ""} left today
           </p>
           <p className="lifesim-chore__text">{pendingChores[0].text}</p>
-          <ChoreChallenge
-            key={pendingChores[0].id}
-            category={pendingChores[0].category}
-            level={character.choreSkills[pendingChores[0].category]}
-            onComplete={(passed) => handleChoreChallengeComplete(pendingChores[0], passed)}
-          />
+          {choreAttempt > 0 && <p className="lifesim-hint">Didn't pass that round — try again.</p>}
+          {currentChoreVariant && (
+            <ChoreChallenge
+              key={`${pendingChores[0].id}-${choreAttempt}`}
+              variant={currentChoreVariant}
+              level={character.choreSkills[pendingChores[0].category]}
+              onComplete={(passed) => handleChoreChallengeComplete(pendingChores[0], currentChoreVariant, passed)}
+            />
+          )}
         </div>
       ) : !meetsAgeUpRequirements(character) ? (
         (() => {

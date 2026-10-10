@@ -12,6 +12,21 @@ import type { LifeCharacter } from "../engine/lifeSim";
 // unlucky player) but skips the skill gain and adds a small happiness hit.
 export type ChoreCategory = "labor" | "errands" | "finance";
 
+// Two distinct mini-games per category (src/ui/ChoreChallenge.tsx renders
+// each one) — which one a given chore instance gets is decided by
+// pickChoreGameVariant in lifeSim.ts using LifeCharacter.choreGameHistory,
+// so the same chore doesn't repeat the exact same game within
+// GAME_REPEAT_COOLDOWN_YEARS of the last time it played that one.
+export type ChoreGameVariant = "timing" | "tap-rhythm" | "sequence" | "odd-one-out" | "math" | "price-compare";
+
+export const VARIANTS_BY_CATEGORY: Record<ChoreCategory, ChoreGameVariant[]> = {
+  labor: ["timing", "tap-rhythm"],
+  errands: ["sequence", "odd-one-out"],
+  finance: ["math", "price-compare"],
+};
+
+export const GAME_REPEAT_COOLDOWN_YEARS = 3;
+
 export interface Chore {
   id: string;
   bands: AgeBand[];

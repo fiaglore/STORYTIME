@@ -3,7 +3,11 @@
 // lifeSim.ts's rollWealthTier). Everybody still starts at the same base
 // stats (createCharacter) — only the starting naira and its Lagos-slang
 // tier label differ, and that's driven by this quiz plus some baked-in
-// randomness, not a deterministic lookup.
+// randomness, not a deterministic lookup. The quiz questions themselves
+// are deliberately unrelated to wealth (birth day, lucky number, sleep
+// habits, spirit animal, favorite color) — per the design ask, nothing
+// about family background, school, or connections should be asked; the
+// tier is just randomly assigned, dressed up as a bit of character flavor.
 
 export type FaithId = "christian" | "muslim" | "traditional" | "atheist" | "other";
 
@@ -57,65 +61,58 @@ export interface CreationQuestion {
 
 // Each answer scores 0-6; three are asked per character, picked at random
 // from this pool so the questionnaire doesn't feel identical every time.
+// None of these have anything to do with family background, money, or
+// status — on purpose. The resulting wealth tier is meant to feel like a
+// roll of the dice, not a reflection of who the player says they are.
 export const CREATION_QUESTIONS: CreationQuestion[] = [
   {
-    id: "family-business",
-    prompt: "What did your people do for a living back home?",
+    id: "birth-day",
+    prompt: "What day of the week do people say you were born?",
     options: [
-      { label: "Nothing steady — hand to mouth", score: 0 },
-      { label: "Hawking and petty trade", score: 2 },
-      { label: "A shop in the market", score: 4 },
-      { label: "Import/export business", score: 6 },
+      { label: "Sunday", score: 0 },
+      { label: "Tuesday", score: 2 },
+      { label: "Thursday", score: 4 },
+      { label: "Saturday", score: 6 },
     ],
   },
   {
-    id: "childhood-home",
-    prompt: "What was home like growing up?",
+    id: "lucky-number",
+    prompt: "Pick a lucky number.",
     options: [
-      { label: "One room, shared with cousins", score: 0 },
-      { label: "A face-me-I-face-you compound", score: 2 },
-      { label: "A proper bungalow, our own", score: 4 },
-      { label: "A duplex with a generator that never had to run", score: 6 },
+      { label: "3", score: 0 },
+      { label: "7", score: 2 },
+      { label: "9", score: 4 },
+      { label: "13", score: 6 },
     ],
   },
   {
-    id: "school",
-    prompt: "Where did your parents manage to send you to school?",
+    id: "body-clock",
+    prompt: "Morning person or night owl?",
     options: [
-      { label: "Public school, when fees could be found", score: 0 },
-      { label: "A decent private school", score: 2 },
-      { label: "A well-known private school", score: 4 },
-      { label: "Abroad, or Lagos's most expensive", score: 6 },
+      { label: "Up with the sun", score: 0 },
+      { label: "Somewhere in between", score: 2 },
+      { label: "Night owl, always", score: 4 },
+      { label: "I don't sleep, I nap", score: 6 },
     ],
   },
   {
-    id: "family-connections",
-    prompt: "Does your family know anybody important?",
+    id: "spirit-animal",
+    prompt: "Which animal do you feel most drawn to?",
     options: [
-      { label: "Nobody — we hustle for ourselves", score: 0 },
-      { label: "A cousin in the civil service", score: 2 },
-      { label: "A few useful contacts in business", score: 4 },
-      { label: "People who get invited to the big parties", score: 6 },
+      { label: "Tortoise", score: 0 },
+      { label: "Cat", score: 2 },
+      { label: "Lion", score: 4 },
+      { label: "Eagle", score: 6 },
     ],
   },
   {
-    id: "transport",
-    prompt: "How did your family get around?",
+    id: "favorite-color",
+    prompt: "What's your favorite color?",
     options: [
-      { label: "Trekking, or whatever danfo was going", score: 0 },
-      { label: "Okada and keke, when in a hurry", score: 2 },
-      { label: "A family car, usually working", score: 4 },
-      { label: "A driver on standby", score: 6 },
-    ],
-  },
-  {
-    id: "big-dream",
-    prompt: "What's the one thing you want out of this life?",
-    options: [
-      { label: "Just to survive and feed my own", score: 1 },
-      { label: "A steady job and a roof that's mine", score: 2 },
-      { label: "To build something people respect", score: 3 },
-      { label: "To be known — everywhere, by everyone", score: 4 },
+      { label: "Green", score: 0 },
+      { label: "Blue", score: 2 },
+      { label: "Red", score: 4 },
+      { label: "Gold", score: 6 },
     ],
   },
 ];

@@ -7,7 +7,13 @@ import {
   type LifeEvent,
   type StatDelta,
 } from "../content/lifeEvents";
-import type { Chore, ChoreCategory } from "../content/chores";
+import {
+  GAME_REPEAT_COOLDOWN_YEARS,
+  VARIANTS_BY_CATEGORY,
+  type Chore,
+  type ChoreCategory,
+  type ChoreGameVariant,
+} from "../content/chores";
 import { SKILLS, type Skill } from "../content/skills";
 import type { ShopItem } from "../content/shop";
 import { WEALTH_TIERS, type FaithId, type WealthTierId } from "../content/characterCreation";
@@ -111,6 +117,11 @@ export interface LifeCharacter {
   // mini-challenge in resolveChore — see ChoreCategory in content/chores.ts
   // and src/ui/ChoreChallenge.tsx for the three challenge types.
   choreSkills: Record<ChoreCategory, number>;
+  // Last mini-game variant played for a given chore id, and at what age —
+  // see pickChoreGameVariant below. Keyed by chore id so two different
+  // chores in the same category can be mid-cooldown on different games at
+  // once.
+  choreGameHistory: Record<string, { variant: ChoreGameVariant; age: number }>;
   // Every send-money gift this character has made, kept only long enough
   // to evaluate the rolling send cap — see SEND_WINDOW_YEARS/
   // SEND_CAP_FRACTION/maxSendable below. Pruned to the window on every
@@ -230,6 +241,7 @@ export function createCharacter(opts: CreateCharacterOptions): LifeCharacter {
     inheritance: opts.inheritance,
     prayersThisYear: 0,
     choreSkills: { labor: 0, errands: 0, finance: 0 },
+    choreGameHistory: {},
     sentTransfers: [],
     schoolId: null,
   };
@@ -484,6 +496,38 @@ export function treatInjury(character: LifeCharacter): LifeCharacter {
 // delta applies with a chore-category skill gain, or a reduced outcome
 // with no gain — failing still clears the chore so a year can never
 // stall forever on one unlucky mini-game.
+// Picks which of a category's two mini-games (ChoreChallenge.tsx) this
+// chore instance gets. If this chore was last played within
+// GAME_REPEAT_COOLDOWN_YEARS, the other variant is preferred — "don't
+// repeat games in 3 years" per the design ask. A chore with no play
+// history yet, or whose last play has aged out of the cooldown, can roll
+// either variant freely.
+export function pickChoreGameVariant(character: LifeCharacter, chore: Chore): ChoreGameVariant {
+  const options = VARIANTS_BY_CATEGORY[chore.category];
+  const history = character.choreGameHistory[chore.id];
+  const eligible =
+    history && character.age - history.age < GAME_REPEAT_COOLDOWN_YEARS
+      ? options.filter((v) => v !== history.variant)
+      : options;
+  const pool = eligible.length > 0 ? eligible : options;
+  return pool[randomInt(0, pool.length - 1)];
+}
+
+// Records that this chore's mini-game was just played, regardless of
+// pass/fail — a failed attempt still "used" that game for the cooldown,
+// so a retry reliably offers the other variant rather than the one that
+// just failed.
+export function recordChoreGamePlayed(
+  character: LifeCharacter,
+  choreId: string,
+  variant: ChoreGameVariant,
+): LifeCharacter {
+  return {
+    ...character,
+    choreGameHistory: { ...character.choreGameHistory, [choreId]: { variant, age: character.age } },
+  };
+}
+
 export function resolveChore(character: LifeCharacter, chore: Chore, passed = true): LifeCharacter {
   const prevNaira = character.stats.naira;
   const delta = passed ? chore.delta : { ...chore.delta, happiness: (chore.delta.happiness ?? 0) - 3 };

@@ -51,6 +51,8 @@ export const CHORES: Chore[] = [
   { id: "keke-squeeze", bands: ["adult"], text: "Squeeze into a keke to beat the morning rush.", delta: { naira: -300 }, maxNaira: 800_000 },
   { id: "manage-staff", bands: ["adult"], text: "Settle a dispute between your driver and the gateman.", delta: { happiness: -1 }, minNaira: 1_000_000 },
   { id: "society-call", bands: ["adult"], text: "An \"old friend\" who just heard you're doing well calls to catch up.", delta: { happiness: -1, naira: -5000 }, minNaira: 2_000_000 },
+  { id: "generator-maintenance", bands: ["adult"], text: "The generator needs servicing before it packs up on you.", delta: { naira: -2000 }, requiresAsset: "generator" },
+  { id: "brt-queue", bands: ["adult"], text: "Join the BRT queue — it's long, but it's the cheapest way to work.", delta: { happiness: -1 }, maxNaira: 1_000_000 },
 ];
 
 // Picks chores that are actually relevant to this character right now —

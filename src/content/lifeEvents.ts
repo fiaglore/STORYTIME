@@ -569,4 +569,161 @@ export const LIFE_EVENTS: LifeEvent[] = [
       },
     ],
   },
+  {
+    id: "flood-damage",
+    bands: ["adult"],
+    prompt: "Heavy rain floods the compound overnight. Water got into the room.",
+    choices: [
+      {
+        label: "Pay for repairs now",
+        result: "A plumber and a mason later, the room is dry again.",
+        delta: { naira: -40000, happiness: 1 },
+        requiresNaira: 40000,
+      },
+      {
+        label: "Patch it yourself and hope",
+        result: "Rainy season isn't over yet. You'll be doing this again.",
+        delta: { health: -2, happiness: -2 },
+      },
+    ],
+  },
+  {
+    id: "danfo-breakdown",
+    bands: ["adult"],
+    prompt: "The danfo breaks down in the middle of traffic. Everyone's filing out.",
+    choices: [
+      {
+        label: "Pay for another bus",
+        result: "A few hundred naira poorer, but you still make it to work.",
+        delta: { naira: -300, happiness: -1 },
+      },
+      {
+        label: "Trek the rest of the way",
+        result: "Your feet hate you by the time you arrive.",
+        delta: { health: -2, happiness: -1 },
+      },
+    ],
+  },
+  {
+    id: "apartment-hunting-fees",
+    bands: ["adult"],
+    prompt: "You've found a decent apartment, but the agent wants a full year's rent plus 10% agency and 10% legal fees — all at once.",
+    choices: [
+      {
+        label: "Pay it all and move in",
+        result: "Everything you'd saved, gone in one transfer. But the place is yours.",
+        delta: { naira: -800000, happiness: 4 },
+        requiresNaira: 800000,
+      },
+      {
+        label: "Keep managing where you are",
+        result: "Another year in the old place. The ceiling still leaks.",
+        delta: { happiness: -2 },
+      },
+    ],
+  },
+  {
+    id: "okada-ban",
+    bands: ["adult"],
+    prompt: "The state bans okada on your usual route again — no warning, just a checkpoint turning bikes back.",
+    choices: [
+      {
+        label: "Trek the long way round",
+        result: "Twenty extra minutes each way, on foot, every day this week.",
+        delta: { health: -2, happiness: -1 },
+      },
+      {
+        label: "Pay extra for a keke instead",
+        result: "More expensive, but at least you're not trekking in the sun.",
+        delta: { naira: -800 },
+      },
+    ],
+  },
+  {
+    id: "pickpocket",
+    bands: ["adult", "teen"],
+    prompt: "The BRT is packed shoulder to shoulder. By the time you notice, your pocket's already lighter.",
+    choices: [
+      {
+        label: "Chase after them, shouting \"Ole!\"",
+        result: "You don't catch them, and now you're bruised from the scramble too.",
+        delta: { naira: -3000, health: -2, happiness: -2 },
+      },
+      {
+        label: "Let it go — it's already gone",
+        result: "Not worth getting hurt over money you won't see again.",
+        delta: { naira: -3000, happiness: -1 },
+      },
+    ],
+  },
+  {
+    id: "mosque-giving",
+    bands: ["adult", "teen"],
+    prompt: "It's Jumat, and the collection is going round after prayers.",
+    choices: [
+      {
+        label: "Give generously",
+        result: "You feel lighter walking out, in more ways than one.",
+        delta: { naira: -5000, happiness: 3 },
+      },
+      {
+        label: "Give what's comfortable",
+        result: "Nobody's counting but you, and you're at peace with it.",
+        delta: { naira: -500, happiness: 1 },
+      },
+    ],
+  },
+  {
+    id: "salary-delay",
+    bands: ["adult"],
+    prompt: "Payday comes and goes. The office says it's \"a network issue\" — again.",
+    choices: [
+      {
+        label: "Vent to your colleagues about it",
+        result: "Misery loves company. Everyone's in the same boat this month.",
+        delta: { happiness: 1 },
+      },
+      {
+        label: "Keep it bottled and keep working",
+        result: "Swallowing it doesn't make the bills wait any longer.",
+        delta: { happiness: -2, health: -1 },
+      },
+    ],
+  },
+  {
+    id: "malaria",
+    bands: ["child", "teen", "adult"],
+    prompt: "The fever hits hard — malaria again, probably from the standing water near the compound.",
+    choices: [
+      {
+        label: "Go to a proper hospital for treatment",
+        result: "A real test, real drugs, and you're back on your feet in days.",
+        delta: { naira: -8000, health: 5 },
+        requiresNaira: 8000,
+      },
+      {
+        label: "Buy cheap drugs from the roadside chemist",
+        result: "Cheaper, and it mostly works, but you're never quite sure what you swallowed.",
+        delta: { naira: -1500, health: 1 },
+      },
+    ],
+  },
+  {
+    id: "village-remittance",
+    bands: ["adult"],
+    prompt: "End of year, and the village union calls — it's time for the annual development levy.",
+    choices: [
+      {
+        label: "Send your contribution",
+        result: "Your name gets called out with respect at the next meeting.",
+        delta: { naira: -15000, happiness: 2 },
+        requiresNaira: 15000,
+      },
+      {
+        label: "Skip it this year",
+        result: "Word travels fast back home. You'll hear about this one.",
+        delta: { happiness: -2 },
+      },
+    ],
+  },
 ];

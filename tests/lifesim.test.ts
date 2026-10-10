@@ -155,6 +155,23 @@ describe("choice gating (requiresAsset / requiresNaira / grantsAsset)", () => {
     expect(isChoiceAvailable(owner, cheapChoice)).toBe(true);
     expect(isChoiceAvailable(rich, cheapChoice)).toBe(false); // rich but no borehole yet
   });
+
+  it("hides apartment-hunting-fees' move-in choice until the character can afford the full year + agency + legal fees", () => {
+    const event = LIFE_EVENTS.find((e) => e.id === "apartment-hunting-fees")!;
+    const moveIn = event.choices.find((c) => c.requiresNaira != null)!;
+    const poor = baseCharacter({ stats: { ...baseCharacter().stats, naira: 100_000 } });
+    expect(isChoiceAvailable(poor, moveIn)).toBe(false);
+    const rich = baseCharacter({ stats: { ...baseCharacter().stats, naira: 900_000 } });
+    expect(isChoiceAvailable(rich, moveIn)).toBe(true);
+  });
+
+  it("every new event still keeps at least one choice available with no money and no assets", () => {
+    const broke = baseCharacter({ stats: { ...baseCharacter().stats, naira: 0 } });
+    for (const id of ["flood-damage", "danfo-breakdown", "apartment-hunting-fees", "okada-ban", "pickpocket", "mosque-giving", "salary-delay", "malaria", "village-remittance"]) {
+      const event = LIFE_EVENTS.find((e) => e.id === id)!;
+      expect(event.choices.some((c) => isChoiceAvailable(broke, c))).toBe(true);
+    }
+  });
 });
 
 describe("ageUp resilience streak", () => {
@@ -212,6 +229,19 @@ describe("chores", () => {
       const picked = pickChores(poor, 20);
       expect(picked.some((c) => c.id === "charge-phone")).toBe(false);
     }
+  });
+
+  it("only offers a requiresAsset chore once the character owns that asset", () => {
+    const withoutGenerator = baseCharacter({ age: 25 });
+    const withGenerator = baseCharacter({ age: 25, assets: ["generator"] });
+    let everSeenWithout = false;
+    let everSeenWith = false;
+    for (let i = 0; i < 30; i++) {
+      if (pickChores(withoutGenerator, 20).some((c) => c.id === "generator-maintenance")) everSeenWithout = true;
+      if (pickChores(withGenerator, 20).some((c) => c.id === "generator-maintenance")) everSeenWith = true;
+    }
+    expect(everSeenWithout).toBe(false);
+    expect(everSeenWith).toBe(true);
   });
 
   it("only offers a minNaira chore once the character can afford the implied lifestyle", () => {

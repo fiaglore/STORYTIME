@@ -12,8 +12,8 @@ import {
   isChoiceAvailable,
   lifeStageForAge,
   meetsAgeUpRequirements,
-  pickEvent,
   pray,
+  rollYearWork,
   pickChoreGameVariant,
   recordChoreGamePlayed,
   resolveChore,
@@ -36,7 +36,7 @@ import {
   type FaithId,
 } from "../engine/lifeSim";
 import type { LifeEvent } from "../content/lifeEvents";
-import { pickChores, type Chore, type ChoreGameVariant } from "../content/chores";
+import type { Chore, ChoreGameVariant } from "../content/chores";
 import { SHOP_CATEGORIES, SHOP_ITEMS, type ShopCategory, type ShopItem } from "../content/shop";
 import { SKILLS, SKILL_TRAIN_COST, type Skill } from "../content/skills";
 import { schoolsAvailableTo, type School } from "../content/schools";
@@ -64,18 +64,10 @@ const INTERVIEW_BONUS: Record<InterviewResult, { naira?: number; happiness?: num
   miss: { happiness: -2 },
 };
 
-// How many small no-choice chores (content/chores.ts) have to be cleared
-// each year before Age Up is available — the deliberate, semi-tedious
-// daily-grind friction the design asks for. Age bands with no chores in
-// the pool (infancy) just get an empty list and Age Up stays immediate.
-const CHORES_PER_YEAR = 4;
-
-// How many life events (content/lifeEvents.ts) fire per year, each
-// resolved one at a time via pendingEvents, same queue shape as
-// pendingChores. pickEvent's own repeat-once-exhausted fallback means a
-// short age-band pool can still fill this every year (deduped within the
-// batch in handleAgeUp).
-const EVENTS_PER_YEAR = 5;
+// How many chores and events a year rolls (and from which age) is decided by
+// rollYearWork in engine/lifeSim.ts — see CHORES_PER_YEAR_BY_BAND and
+// EVENTS_PER_YEAR_BY_BAND there. Infants (0-2) roll none, so Age Up stays
+// immediate for them; the child band (3+) is where the daily grind starts.
 
 // With 600 shop items, rendering every match is wasteful and the list
 // becomes unscannable — cap what's shown at once and tell the player to
@@ -143,16 +135,16 @@ export function LifeSim({ onExit }: Props) {
   const [pendingJob, setPendingJob] = useState<JobId | null>(null);
   // Not persisted in the save — a reload just rolls a fresh set of chores
   // for the current year rather than remembering which were already done,
-  // which is fine for low-stakes busywork like this. pickChores/pickEvent
-  // already return nothing for the infant band (ages 0-2) on their own —
-  // there's no separate age cutoff needed here, and gating on
+  // which is fine for low-stakes busywork like this. rollYearWork already
+  // returns nothing for the infant band (ages 0-2) on its own — there's
+  // no separate age cutoff needed here, and gating on
   // AGE_SCHOOL_CHOICE_CUTOFF used to wrongly suppress ages 3-10's real
   // child-band chores/events too (the school choice is meant to be one
   // extra step alongside them, not a replacement for a decade of
   // gameplay) — that was a real bug.
   const [pendingChores, setPendingChores] = useState<Chore[]>(() => {
     const saved = loadSaved();
-    return saved && saved.alive ? pickChores(saved, CHORES_PER_YEAR) : [];
+    return saved && saved.alive ? rollYearWork(saved).chores : [];
   });
   const [choreAttempt, setChoreAttempt] = useState(0);
   const uid = useAuthStore((s) => s.user?.uid);
@@ -287,29 +279,17 @@ export function LifeSim({ onExit }: Props) {
       return;
     const aged = ageUp(character);
     setCharacter(aged);
-    // pickChores/pickEvent already return nothing for the infant band
-    // (ages 0-2) on their own, so this runs unconditionally — ages 3-10
-    // get real child-band chores and events same as any other year, with
-    // the school-choice screen (shown separately below, once, whenever
-    // age <= AGE_SCHOOL_CHOICE_CUTOFF && !schoolId) as one extra step
-    // alongside them, not instead of them.
+    // Chores and events start at age 3 (the child band); infants roll empty
+    // lists so ages 0-2 stay an instant Age Up. The school choice (shown
+    // separately below, once, whenever age <= AGE_SCHOOL_CHOICE_CUTOFF &&
+    // !schoolId) is a one-time extra step alongside this, not instead of
+    // it — rollYearWork's pickEvents dedupes within the year's batch on
+    // its own (unseen-first then shuffled), since pickEvent's own
+    // seenEventIds check doesn't update until an event is resolved.
     if (aged.alive) {
-      setPendingChores(pickChores(aged, CHORES_PER_YEAR));
-      // Dedupes within this year's batch — pickEvent only avoids repeats
-      // against seenEventIds, which doesn't update until an event is
-      // actually resolved, so without this the same event could be drawn
-      // twice in one year. Stops early once the band's pool is smaller
-      // than EVENTS_PER_YEAR rather than forcing a duplicate in.
-      const events: LifeEvent[] = [];
-      const pickedIds = new Set<string>();
-      for (let attempts = 0; events.length < EVENTS_PER_YEAR && attempts < EVENTS_PER_YEAR * 4; attempts++) {
-        const event = pickEvent(aged);
-        if (!event) break;
-        if (pickedIds.has(event.id)) continue;
-        pickedIds.add(event.id);
-        events.push(event);
-      }
-      setPendingEvents(events);
+      const work = rollYearWork(aged);
+      setPendingChores(work.chores);
+      setPendingEvents(work.events);
     }
   };
 

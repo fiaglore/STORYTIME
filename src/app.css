@@ -791,7 +791,11 @@
   top: 0.75rem;
   transform: translateX(-50%);
   background: #fff;
-  color: var(--text);
+  /* Fixed dark text, not var(--text) — this bubble is always white paper
+     regardless of theme, but --text flips to a near-white color in dark
+     mode, which made the text unreadable against the still-white
+     background. This was a real bug, caught on a real device. */
+  color: #241c15;
   font-family: var(--font-serif);
   font-size: 0.95rem;
   line-height: 1.4;
@@ -887,7 +891,9 @@
   border-radius: 1.1rem;
   border: none;
   background: #fff;
-  color: var(--text);
+  /* Fixed dark text, not var(--text) — same dark-mode contrast bug as
+     .rpg-bubble above: this pill is always white regardless of theme. */
+  color: #241c15;
   cursor: pointer;
   text-align: left;
   transition: transform 0.15s cubic-bezier(0.22, 1, 0.36, 1), background 0.15s ease,

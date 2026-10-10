@@ -62,6 +62,16 @@ separate systems — don't assume one when working on the other.
   it rather than hand-editing the PNGs; it renders at 4x supersample and
   downscales once with LANCZOS (rendering straight at the final size, or
   downscaling in two steps, produced visible blur in an earlier pass).
+- `index.css` defines a real dark theme (`--text`/`--bg`/etc. flip under
+  `prefers-color-scheme: dark` and `[data-theme="dark"]`), not just
+  `color-scheme: light dark` left to the browser. `.rpg-bubble` and
+  `.rpg-choice-pill` are intentionally always-white (a paper speech
+  bubble/choice pill look, not meant to follow the theme), so they use a
+  fixed `color: #241c15` rather than `var(--text)` — pairing a hardcoded
+  white background with the theme variable made the text flip to
+  near-white-on-white and vanish in dark mode on a real device. This was a
+  real bug. Any other element that intentionally keeps a fixed (not
+  theme-aware) background needs a fixed text color too, not `var(--text)`.
 - When a choice can lead to the *same* `spot` as the one just visited
   (e.g. two consecutive knots both at "stall"), close the dialogue via the
   choice handler itself, not an effect keyed on "did the spot id change" —

@@ -42,6 +42,7 @@ def draw_person(
     accessory=None,
     brow_angry=False,
     tray=False,
+    walking=False,
 ):
     img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
@@ -50,12 +51,19 @@ def draw_person(
     # shadow
     d.ellipse([cx - px(28), px(234), cx + px(28), px(240)], fill=(0, 0, 0, 40))
 
-    # legs + shoes
+    # legs + shoes — a mid-stride pose (legs spread, one knee raised) swapped
+    # in for the idle pose while the player is walking, as a 2-frame cycle.
     leg_top, leg_bot = px(150), px(222)
-    d.rounded_rectangle([cx - px(17), leg_top, cx - px(3), leg_bot], radius=px(5), fill=outfit_dark)
-    d.rounded_rectangle([cx + px(3), leg_top, cx + px(17), leg_bot], radius=px(5), fill=outfit_dark)
-    d.ellipse([cx - px(19), leg_bot - px(4), cx - px(1), leg_bot + px(6)], fill=shoe)
-    d.ellipse([cx + px(1), leg_bot - px(4), cx + px(19), leg_bot + px(6)], fill=shoe)
+    if walking:
+        d.rounded_rectangle([cx - px(23), leg_top - px(2), cx - px(9), leg_bot - px(12)], radius=px(5), fill=outfit_dark)
+        d.rounded_rectangle([cx + px(9), leg_top + px(6), cx + px(23), leg_bot], radius=px(5), fill=outfit_dark)
+        d.ellipse([cx - px(25), leg_bot - px(16), cx - px(7), leg_bot - px(6)], fill=shoe)
+        d.ellipse([cx + px(7), leg_bot - px(4), cx + px(25), leg_bot + px(6)], fill=shoe)
+    else:
+        d.rounded_rectangle([cx - px(17), leg_top, cx - px(3), leg_bot], radius=px(5), fill=outfit_dark)
+        d.rounded_rectangle([cx + px(3), leg_top, cx + px(17), leg_bot], radius=px(5), fill=outfit_dark)
+        d.ellipse([cx - px(19), leg_bot - px(4), cx - px(1), leg_bot + px(6)], fill=shoe)
+        d.ellipse([cx + px(1), leg_bot - px(4), cx + px(19), leg_bot + px(6)], fill=shoe)
 
     # torso: narrower shoulders, flares to a hem
     torso_top, torso_bot = px(96), px(156)
@@ -70,11 +78,18 @@ def draw_person(
     )
     d.rounded_rectangle([cx - px(28), torso_top, cx + px(28), torso_top + px(26)], radius=px(12), fill=outfit)
 
-    # arms, ending in hands
+    # arms, ending in hands — swing opposite the legs while walking
     for side in (-1, 1):
         sx = cx + side * px(32)
-        d.rounded_rectangle([sx - px(7), torso_top + px(10), sx + px(7), torso_top + px(52)], radius=px(7), fill=skin)
-        d.ellipse([sx - px(8), torso_top + px(46), sx + px(8), torso_top + px(62)], fill=skin)
+        arm_shift = (px(6) if side == -1 else -px(6)) if walking else 0
+        d.rounded_rectangle(
+            [sx - px(7), torso_top + px(10) + arm_shift, sx + px(7), torso_top + px(52) + arm_shift],
+            radius=px(7), fill=skin,
+        )
+        d.ellipse(
+            [sx - px(8), torso_top + px(46) + arm_shift, sx + px(8), torso_top + px(62) + arm_shift],
+            fill=skin,
+        )
 
     if tray:
         # a small round tray/bowl held at waist height, for the frying pose
@@ -161,6 +176,18 @@ def main():
         skin_ngozi, orange, orange_dark, headwrap=orange_dark, headwrap_dark=wrap_dark, brow_angry=True
     ).save(OUT / "ngozi-defiant.png")
 
+    # Mid-stride walk frames for the 3 player-controlled sprites (NPCs never
+    # move, so they don't need one) — RpgMap swaps to these while walking.
+    draw_person(skin_ngozi, orange, orange_dark, headwrap=orange_dark, headwrap_dark=wrap_dark, walking=True).save(
+        OUT / "ngozi-walk.png"
+    )
+    draw_person(
+        skin_ngozi, orange, orange_dark, headwrap=orange_dark, headwrap_dark=wrap_dark, tray=True, walking=True
+    ).save(OUT / "ngozi-fry-walk.png")
+    draw_person(
+        skin_ngozi, orange, orange_dark, headwrap=orange_dark, headwrap_dark=wrap_dark, brow_angry=True, walking=True
+    ).save(OUT / "ngozi-defiant-walk.png")
+
     skin_jagaban = (140, 90, 55, 255)
     mustard = (168, 122, 40, 255)
     mustard_dark = (108, 76, 20, 255)
@@ -171,7 +198,7 @@ def main():
     brown_dark = (72, 46, 22, 255)
     draw_person(skin_trader, brown, brown_dark, hair=(35, 24, 16, 255)).save(OUT / "trader.png")
 
-    print(f"saved 5 sprites to {OUT}")
+    print(f"saved 8 sprites to {OUT}")
 
 
 if __name__ == "__main__":

@@ -685,8 +685,12 @@
 }
 
 .rpg-stage__player {
-  transition: left 0.35s ease, top 0.35s ease;
+  transition: left 0.42s ease, top 0.42s ease;
   z-index: 2;
+}
+
+.rpg-stage__player--walking {
+  animation: rpg-bob 0.3s ease-in-out infinite;
 }
 
 .rpg-stage__npc {

@@ -46,6 +46,16 @@ separate systems — don't assume one when working on the other.
   `HOTSPOTS` map (currently Chapter 1's Oshodi market layout only — a new
   chapter with a different setting needs its own hotspot map and
   background art, or a second RpgMap-like component).
+- Walking is tap/click-anywhere-on-the-floor via `handleStageClick`, not
+  "press the hotspot button" — a tap within `HOTSPOT_TAP_RADIUS` of the
+  active hotspot snaps onto it and opens the dialogue (same as tapping its
+  button directly, which stays as the accessible/keyboard path), a tap
+  further away just walks there for free wandering, no dialogue. The
+  player sprite also alternates between its idle and `-walk` mid-stride
+  frame (`WALK_FRAMES`, `walkFrame` state, `WALK_FRAME_MS`) while
+  `walking` is true, instead of sliding a single static pose across the
+  map — see `scripts/gen-sprites.py`'s `walking` param for how the
+  mid-stride frames are drawn.
 - `.rpg-stage` fills the available vertical space (`flex: 1` inside
   `.story-screen`'s flex column) instead of a fixed `aspect-ratio` box —
   it used to leave roughly half the screen blank below a short landscape

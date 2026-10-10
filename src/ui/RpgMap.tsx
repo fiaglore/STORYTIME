@@ -36,7 +36,21 @@ const CHARACTERS: Record<string, string> = {
   trader: "/sprites/trader.png",
 };
 
+// Mid-stride frames, swapped in for the idle pose while the player is
+// walking (see scripts/gen-sprites.py). NPCs never move, so only the
+// player-controlled ngozi variants have one.
+const WALK_FRAMES: Record<string, string> = {
+  ngozi: "/sprites/ngozi-walk.png",
+  "ngozi-fry": "/sprites/ngozi-fry-walk.png",
+  "ngozi-defiant": "/sprites/ngozi-defiant-walk.png",
+};
+
 const NUDGE = 3;
+const WALK_MS = 420;
+const WALK_FRAME_MS = 150;
+// How close (in stage %) a tap needs to land to the active hotspot to count
+// as "walk there and open the dialogue" rather than just free walking.
+const HOTSPOT_TAP_RADIUS = 12;
 
 export function RpgMap({ chapter, storyJson, onEnding, onExit }: Props) {
   const {
@@ -61,7 +75,9 @@ export function RpgMap({ chapter, storyJson, onEnding, onExit }: Props) {
   }));
   const [dialogueOpen, setDialogueOpen] = useState(false);
   const [walking, setWalking] = useState(false);
+  const [walkFrame, setWalkFrame] = useState(false);
   const walkTimeout = useRef<number | null>(null);
+  const stageRef = useRef<HTMLDivElement>(null);
   const [charId, npcSpot] = (stageTag ?? "ngozi@stall").split("@");
 
   // Mama Ngozi is the player — when she's the one "on stage" we pose the
@@ -78,6 +94,16 @@ export function RpgMap({ chapter, storyJson, onEnding, onExit }: Props) {
       if (walkTimeout.current !== null) window.clearTimeout(walkTimeout.current);
     };
   }, []);
+
+  // Alternates the player sprite between its idle and mid-stride frame
+  // while walking — a 2-frame walk cycle instead of a single static pose
+  // sliding across the map. Render-time code only reads walkFrame when
+  // walking is also true, so there's nothing to reset when it stops.
+  useEffect(() => {
+    if (!walking) return;
+    const interval = window.setInterval(() => setWalkFrame((f) => !f), WALK_FRAME_MS);
+    return () => window.clearInterval(interval);
+  }, [walking]);
 
   useEffect(() => {
     if (ending && reportedEndingId.current !== ending.id) {
@@ -114,16 +140,46 @@ export function RpgMap({ chapter, storyJson, onEnding, onExit }: Props) {
     return () => window.removeEventListener("keydown", onKey);
   }, [dialogueOpen, walking, ending]);
 
-  const walkToHotspot = (id: string) => {
-    if (id !== activeSpot || dialogueOpen || walking) return;
-    const spot = HOTSPOTS[id];
-    setPlayerPos({ x: spot.x, y: spot.y });
+  // Walks the player to any point on the floor. Passing arriveHotspot opens
+  // the dialogue once the walk finishes — used both for tapping the active
+  // hotspot directly and for tapping anywhere close enough to it; a tap
+  // further away just walks there with no dialogue, for free wandering.
+  const walkTo = (x: number, y: number, arriveHotspot?: string) => {
+    if (dialogueOpen || walking || ending) return;
+    setPlayerPos({ x, y });
     setWalking(true);
     walkTimeout.current = window.setTimeout(() => {
       walkTimeout.current = null;
       setWalking(false);
-      setDialogueOpen(true);
-    }, 350);
+      if (arriveHotspot) setDialogueOpen(true);
+    }, WALK_MS);
+  };
+
+  const walkToHotspot = (id: string) => {
+    if (id !== activeSpot) return;
+    const spot = HOTSPOTS[id];
+    walkTo(spot.x, spot.y, id);
+  };
+
+  // Tapping/clicking anywhere on the floor walks the player there — close
+  // enough to the active hotspot snaps onto it and opens the dialogue,
+  // same as tapping its button, so the hotspot is a destination to walk to
+  // rather than the only clickable thing on the screen.
+  const handleStageClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (dialogueOpen || walking || ending) return;
+    const target = e.target as HTMLElement;
+    if (target.closest(".rpg-hotspot")) return; // handled by the hotspot button itself
+    const rect = stageRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const xPct = Math.min(97, Math.max(3, ((e.clientX - rect.left) / rect.width) * 100));
+    const yPct = Math.min(95, Math.max(8, ((e.clientY - rect.top) / rect.height) * 100));
+    const hotspot = HOTSPOTS[activeSpot];
+    const distToHotspot = Math.hypot(xPct - hotspot.x, yPct - hotspot.y);
+    if (distToHotspot < HOTSPOT_TAP_RADIUS) {
+      walkTo(hotspot.x, hotspot.y, activeSpot);
+    } else {
+      walkTo(xPct, yPct);
+    }
   };
 
   // Making a choice always closes the dialogue immediately, even when the
@@ -181,7 +237,7 @@ export function RpgMap({ chapter, storyJson, onEnding, onExit }: Props) {
 
       <MeterBar naira={meters.naira ?? 0} spirit={meters.spirit ?? 0} chapterMeter={chapterMeter} />
 
-      <div className="rpg-stage">
+      <div className="rpg-stage" ref={stageRef} onClick={handleStageClick}>
         <img className="rpg-stage__bg" src={`${base}sprites/map-oshodi.png`} alt="" aria-hidden="true" />
 
         {Object.entries(HOTSPOTS).map(([id, spot]) => (
@@ -212,9 +268,13 @@ export function RpgMap({ chapter, storyJson, onEnding, onExit }: Props) {
         )}
 
         <img
-          className="rpg-stage__player"
+          className={`rpg-stage__player ${walking ? "rpg-stage__player--walking" : ""}`}
           style={{ left: `${playerPos.x}%`, top: `${playerPos.y}%` }}
-          src={`${base}${CHARACTERS[playerSprite]?.slice(1) ?? "sprites/ngozi.png"}`}
+          src={`${base}${(
+            (walking && walkFrame ? WALK_FRAMES[playerSprite] : undefined) ??
+            CHARACTERS[playerSprite] ??
+            "/sprites/ngozi.png"
+          ).slice(1)}`}
           alt="Mama Ngozi"
         />
 

@@ -698,6 +698,19 @@
   animation-delay: -1.1s;
 }
 
+.rpg-stage__ambient {
+  position: absolute;
+  height: 16%;
+  width: auto;
+  transform: translate(-50%, -92%);
+  opacity: 0.85;
+  pointer-events: none;
+  filter: drop-shadow(0 3px 3px rgba(0, 0, 0, 0.25));
+  transition: left 3s ease, top 3s ease;
+  animation: rpg-bob 2.8s ease-in-out infinite;
+  z-index: 1;
+}
+
 .rpg-ghost {
   position: absolute;
   height: 21%;
@@ -1109,6 +1122,30 @@
   font-size: 1.1rem;
   line-height: 1.5;
   margin-bottom: 0.9rem;
+}
+
+.lifesim-chore {
+  border: 1px dashed var(--border);
+  border-radius: 0.85rem;
+  padding: 0.9rem 1rem;
+  background: var(--bg-elevated);
+  margin-top: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  animation: rpg-bubble-in 0.2s ease-out;
+}
+
+.lifesim-chore__counter {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+.lifesim-chore__text {
+  font-size: 0.95rem;
 }
 
 .lifesim-age-up {

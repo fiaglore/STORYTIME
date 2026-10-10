@@ -6,8 +6,10 @@ import {
   type LifeEvent,
   type StatDelta,
 } from "../content/lifeEvents";
+import type { Chore } from "../content/chores";
 
 export type { AssetId };
+export { bandForAge };
 
 export interface LifeStats {
   happiness: number;
@@ -215,6 +217,18 @@ export function resolveEvent(
     next.log = [...next.log, `Age ${character.age}: ${character.name} has passed away. ${cause}`];
   }
   return next;
+}
+
+// Applies one small no-choice daily task (see content/chores.ts) — unlike
+// resolveEvent there's no choice index or availability gate, just the one
+// delta and a log line, since a chore is the "you just have to do this"
+// busywork that gates Age Up rather than a dramatic branching moment.
+export function resolveChore(character: LifeCharacter, chore: Chore): LifeCharacter {
+  return {
+    ...character,
+    stats: applyDelta(character.stats, chore.delta),
+    log: [...character.log, `Age ${character.age}: ${chore.text}`],
+  };
 }
 
 export function takeJob(character: LifeCharacter, job: JobId): LifeCharacter {

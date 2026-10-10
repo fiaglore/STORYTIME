@@ -6,11 +6,13 @@ import {
   checkDeath,
   createCharacter,
   isChoiceAvailable,
+  resolveChore,
   resolveEvent,
   takeJob,
   type LifeCharacter,
 } from "../src/engine/lifeSim";
 import { LIFE_EVENTS, bandForAge } from "../src/content/lifeEvents";
+import { CHORES, pickChores } from "../src/content/chores";
 
 function baseCharacter(overrides: Partial<LifeCharacter> = {}): LifeCharacter {
   return {
@@ -158,6 +160,35 @@ describe("ageUp resilience streak", () => {
     const c = baseCharacter({ age: 20, streak: 5, stats: { happiness: 50, health: 1, smarts: 50, looks: 50, naira: 0 } });
     const next = ageUp(c);
     expect(next.streak).toBe(0);
+  });
+});
+
+describe("chores", () => {
+  it("covers every choice-making age band with at least one chore", () => {
+    const bands: ReturnType<typeof bandForAge>[] = ["child", "teen", "adult"];
+    for (const band of bands) {
+      expect(CHORES.filter((c) => c.bands.includes(band)).length).toBeGreaterThan(0);
+    }
+  });
+
+  it("returns an empty list for a band with no chores (infant) rather than throwing", () => {
+    expect(pickChores("infant", 3)).toEqual([]);
+  });
+
+  it("never returns more chores than requested or than exist for the band", () => {
+    const picked = pickChores("adult", 3);
+    expect(picked.length).toBeLessThanOrEqual(3);
+    expect(picked.every((c) => c.bands.includes("adult"))).toBe(true);
+    // no duplicates
+    expect(new Set(picked.map((c) => c.id)).size).toBe(picked.length);
+  });
+
+  it("resolveChore applies the delta and logs the chore's text", () => {
+    const chore = CHORES.find((c) => c.id === "market-run")!;
+    const c = baseCharacter({ stats: { happiness: 50, health: 50, smarts: 50, looks: 50, naira: 5000 } });
+    const next = resolveChore(c, chore);
+    expect(next.stats.naira).toBe(3000); // 5000 - 2000
+    expect(next.log.at(-1)).toContain(chore.text);
   });
 });
 

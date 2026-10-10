@@ -3,10 +3,12 @@ import {
   ageUp,
   applyDelta,
   availableJobs,
+  bandForAge,
   createCharacter,
   isChoiceAvailable,
   lifeStageForAge,
   pickEvent,
+  resolveChore,
   resolveEvent,
   takeJob,
   JOBS,
@@ -14,6 +16,7 @@ import {
   type JobId,
 } from "../engine/lifeSim";
 import type { LifeEvent } from "../content/lifeEvents";
+import { pickChores, type Chore } from "../content/chores";
 import { fetchCloudSave, writeCloudSave } from "../engine/firebase";
 import { useAuthStore } from "../engine/authStore";
 import { AccountSection } from "./AccountSection";
@@ -27,6 +30,12 @@ const INTERVIEW_BONUS: Record<InterviewResult, { naira?: number; happiness?: num
   good: { naira: 5_000, happiness: 1 },
   miss: { happiness: -2 },
 };
+
+// How many small no-choice chores (content/chores.ts) have to be cleared
+// each year before Age Up is available — the deliberate, semi-tedious
+// daily-grind friction the design asks for. Age bands with no chores in
+// the pool (infancy) just get an empty list and Age Up stays immediate.
+const CHORES_PER_YEAR = 3;
 
 function formatNaira(amount: number): string {
   const sign = amount > 0 ? "+" : amount < 0 ? "-" : "";
@@ -73,6 +82,13 @@ export function LifeSim({ onExit }: Props) {
   const [activeEvent, setActiveEvent] = useState<LifeEvent | null>(null);
   const [showJobs, setShowJobs] = useState(false);
   const [pendingJob, setPendingJob] = useState<JobId | null>(null);
+  // Not persisted in the save — a reload just rolls a fresh set of chores
+  // for the current year rather than remembering which were already done,
+  // which is fine for low-stakes busywork like this.
+  const [pendingChores, setPendingChores] = useState<Chore[]>(() => {
+    const saved = loadSaved();
+    return saved && saved.alive ? pickChores(bandForAge(saved.age), CHORES_PER_YEAR) : [];
+  });
   const uid = useAuthStore((s) => s.user?.uid);
   const pulledForUid = useRef<string | null>(null);
   const statEvents = useStatDeltas(character ? { ...character.stats } : {});
@@ -94,17 +110,28 @@ export function LifeSim({ onExit }: Props) {
   }, [uid]);
 
   const startLife = () => {
-    setCharacter(createCharacter(nameInput));
+    const next = createCharacter(nameInput);
+    setCharacter(next);
     setActiveEvent(null);
+    setPendingChores(pickChores(bandForAge(next.age), CHORES_PER_YEAR));
+  };
+
+  const handleChore = (chore: Chore) => {
+    if (!character) return;
+    setCharacter(resolveChore(character, chore));
+    setPendingChores((cs) => cs.filter((c) => c.id !== chore.id));
   };
 
   const handleAgeUp = () => {
-    if (!character || !character.alive || activeEvent || pendingJob) return;
+    if (!character || !character.alive || activeEvent || pendingJob || pendingChores.length > 0) return;
     const aged = ageUp(character);
     setCharacter(aged);
-    if (aged.alive && Math.random() < EVENT_CHANCE) {
-      const event = pickEvent(aged);
-      if (event) setActiveEvent(event);
+    if (aged.alive) {
+      setPendingChores(pickChores(bandForAge(aged.age), CHORES_PER_YEAR));
+      if (Math.random() < EVENT_CHANCE) {
+        const event = pickEvent(aged);
+        if (event) setActiveEvent(event);
+      }
     }
   };
 
@@ -130,6 +157,7 @@ export function LifeSim({ onExit }: Props) {
   const startNewLife = () => {
     setCharacter(null);
     setNameInput("");
+    setPendingChores([]);
   };
 
   if (!character) {
@@ -341,6 +369,16 @@ export function LifeSim({ onExit }: Props) {
               );
             })}
           </div>
+        </div>
+      ) : pendingChores.length > 0 ? (
+        <div className="lifesim-chore">
+          <p className="lifesim-chore__counter">
+            Before you can age up — {pendingChores.length} thing{pendingChores.length > 1 ? "s" : ""} left today
+          </p>
+          <p className="lifesim-chore__text">{pendingChores[0].text}</p>
+          <button className="choice-button choice-button--primary" onClick={() => handleChore(pendingChores[0])}>
+            Done
+          </button>
         </div>
       ) : (
         !pendingJob && (

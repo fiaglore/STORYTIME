@@ -198,7 +198,23 @@ def main():
     brown_dark = (72, 46, 22, 255)
     draw_person(skin_trader, brown, brown_dark, hair=(35, 24, 16, 255)).save(OUT / "trader.png")
 
-    print(f"saved 8 sprites to {OUT}")
+    # Ambient background market-goers — purely decorative figures that
+    # wander the map (RpgMap's AMBIENT_NPCS), distinct in color from both
+    # the player and the named story NPCs (jagaban/trader) so they don't
+    # get mistaken for someone with a line of dialogue.
+    skin_passerby1 = (176, 120, 80, 255)
+    teal = (62, 110, 100, 255)
+    teal_dark = (38, 72, 65, 255)
+    draw_person(skin_passerby1, teal, teal_dark, headwrap=teal_dark, headwrap_dark=(50, 90, 82, 255)).save(
+        OUT / "passerby-1.png"
+    )
+
+    skin_passerby2 = (120, 78, 50, 255)
+    slate = (90, 95, 110, 255)
+    slate_dark = (58, 62, 75, 255)
+    draw_person(skin_passerby2, slate, slate_dark, hair=(20, 16, 14, 255)).save(OUT / "passerby-2.png")
+
+    print(f"saved 10 sprites to {OUT}")
 
 
 if __name__ == "__main__":

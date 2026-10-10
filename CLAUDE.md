@@ -56,6 +56,14 @@ separate systems — don't assume one when working on the other.
   `walking` is true, instead of sliding a single static pose across the
   map — see `scripts/gen-sprites.py`'s `walking` param for how the
   mid-stride frames are drawn.
+- `AMBIENT_NPCS` in `RpgMap.tsx` are purely decorative background market-
+  goers (sprites `passerby-1`/`passerby-2`, distinct colors from both the
+  player and the named story NPCs so they're not mistaken for someone with
+  a line of dialogue) that drift around a home point on a timer
+  (`AMBIENT_WANDER_MS`). They're unrelated to the real-player presence
+  ghosts (`.rpg-ghost`, see "Firebase / cloud save" below) — ambient NPCs
+  are always there regardless of whether anyone else is online; presence
+  ghosts are other real signed-in players.
 - `.rpg-stage` fills the available vertical space (`flex: 1` inside
   `.story-screen`'s flex column) instead of a fixed `aspect-ratio` box —
   it used to leave roughly half the screen blank below a short landscape
@@ -141,6 +149,17 @@ separate systems — don't assume one when working on the other.
   target zone) shown before a Lagos Life job is confirmed; the job is
   granted regardless of the result, which only changes a one-time naira/
   happiness bonus — see `INTERVIEW_BONUS` in `LifeSim.tsx`.
+- Age Up is deliberately semi-tedious: `src/content/chores.ts`'s `CHORES`
+  is a pool of small, no-choice, single-"Done"-tap daily tasks (distinct
+  from `LIFE_EVENTS`, which have real branching choices and bigger
+  stakes); `pickChores(band, CHORES_PER_YEAR)` rolls a fresh set every time
+  a year starts (character creation and every `ageUp`), and `LifeSim.tsx`
+  won't show the Age Up button again until `pendingChores` is empty — see
+  `resolveChore` in `lifeSim.ts`. A band with no chores in the pool
+  (infancy) just gets an empty list, so Age Up stays immediate there; add
+  new chores to the pool rather than raising `CHORES_PER_YEAR` if an age
+  band needs more variety, so the friction doesn't come from repeating the
+  same 2-3 chores over and over.
 - Run `npm test` and `npm run build` before finishing any task.
 
 ## Firebase / cloud save

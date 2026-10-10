@@ -47,6 +47,17 @@ const WALK_FRAMES: Record<string, string> = {
   "ngozi-defiant": "/sprites/ngozi-defiant-walk.png",
 };
 
+// Purely decorative background market-goers (not the real-player presence
+// ghosts, not a named story NPC) — just ambient life so the market doesn't
+// feel empty when no other real player happens to be online. Each wanders
+// in a small random walk around its home point; non-interactive.
+const AMBIENT_NPCS: { id: string; sprite: string; home: { x: number; y: number }; radius: number }[] = [
+  { id: "amb1", sprite: "passerby-1", home: { x: 28, y: 66 }, radius: 8 },
+  { id: "amb2", sprite: "passerby-2", home: { x: 55, y: 72 }, radius: 7 },
+  { id: "amb3", sprite: "passerby-1", home: { x: 75, y: 38 }, radius: 6 },
+];
+const AMBIENT_WANDER_MS = 3500;
+
 const NUDGE = 3;
 const WALK_MS = 420;
 const WALK_FRAME_MS = 150;
@@ -81,6 +92,9 @@ export function RpgMap({ chapter, storyJson, onEnding, onExit }: Props) {
   const walkTimeout = useRef<number | null>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const [charId, npcSpot] = (stageTag ?? "ngozi@stall").split("@");
+  const [ambientPos, setAmbientPos] = useState(() =>
+    Object.fromEntries(AMBIENT_NPCS.map((n) => [n.id, n.home])),
+  );
 
   // Other signed-in players currently on this same chapter's map, as live
   // Firestore presence — see src/engine/firebase.ts. Off entirely when not
@@ -105,6 +119,26 @@ export function RpgMap({ chapter, storyJson, onEnding, onExit }: Props) {
     return () => {
       if (walkTimeout.current !== null) window.clearTimeout(walkTimeout.current);
     };
+  }, []);
+
+  // Ambient background figures drift to a new random point near their home
+  // every tick, purely for atmosphere — not tied to any game state.
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      setAmbientPos((prev) => {
+        const next = { ...prev };
+        for (const npc of AMBIENT_NPCS) {
+          const angle = Math.random() * Math.PI * 2;
+          const dist = Math.random() * npc.radius;
+          next[npc.id] = {
+            x: Math.min(97, Math.max(3, npc.home.x + Math.cos(angle) * dist)),
+            y: Math.min(95, Math.max(8, npc.home.y + Math.sin(angle) * dist)),
+          };
+        }
+        return next;
+      });
+    }, AMBIENT_WANDER_MS);
+    return () => window.clearInterval(interval);
   }, []);
 
   // Alternates the player sprite between its idle and mid-stride frame
@@ -289,6 +323,22 @@ export function RpgMap({ chapter, storyJson, onEnding, onExit }: Props) {
 
       <div className="rpg-stage" ref={stageRef} onClick={handleStageClick}>
         <img className="rpg-stage__bg" src={`${base}sprites/map-oshodi.png`} alt="" aria-hidden="true" />
+
+        {!dialogueOpen &&
+          !ending &&
+          AMBIENT_NPCS.map((npc) => (
+            <img
+              key={npc.id}
+              className="rpg-stage__ambient"
+              style={{
+                left: `${ambientPos[npc.id]?.x ?? npc.home.x}%`,
+                top: `${ambientPos[npc.id]?.y ?? npc.home.y}%`,
+              }}
+              src={`${base}sprites/${npc.sprite}.png`}
+              alt=""
+              aria-hidden="true"
+            />
+          ))}
 
         {Object.entries(HOTSPOTS).map(([id, spot]) => (
           <button

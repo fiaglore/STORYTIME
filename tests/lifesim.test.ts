@@ -25,11 +25,13 @@ import {
   rollWealthTier,
   sendMoney,
   takeJob,
+  talkToClassroomNPC,
   treatInjury,
   trainSkill,
   unblockPlayer,
   AGE_SCHOOL_CHOICE_CUTOFF,
   AGE_UP_REQUIREMENTS,
+  MAX_CLASSROOM_TALKS_PER_YEAR,
   MAX_HUSTLES_PER_YEAR,
   MAX_PRAYERS_PER_YEAR,
   REVIVE_COST,
@@ -40,7 +42,8 @@ import {
 import { SCHOOLS } from "../src/content/schools";
 import { WEALTH_TIERS } from "../src/content/characterCreation";
 import { LIFE_EVENTS, bandForAge } from "../src/content/lifeEvents";
-import { CHORES, pickChores } from "../src/content/chores";
+import { CHORES, ownsVehicle, pickChores } from "../src/content/chores";
+import { CLASSROOM_NPCS } from "../src/content/classroom";
 import { SHOP_CATEGORIES, SHOP_ITEMS } from "../src/content/shop";
 import { SKILLS, SKILL_TRAIN_COST } from "../src/content/skills";
 
@@ -72,6 +75,8 @@ function baseCharacter(overrides: Partial<LifeCharacter> = {}): LifeCharacter {
     sentTransfers: [],
     schoolId: null,
     choreGameHistory: {},
+    ateThisYear: false,
+    classroomTalksThisYear: 0,
     ...overrides,
   };
 }
@@ -637,6 +642,95 @@ describe("shop", () => {
     const cheapest = Math.min(...SHOP_ITEMS.map((i) => i.price));
     expect(cheapest).toBeLessThanOrEqual(500);
   });
+
+  it("includes a dirt-cheap food item, so the eat requirement is always satisfiable", () => {
+    const cheapestFood = Math.min(...SHOP_ITEMS.filter((i) => i.category === "food").map((i) => i.price));
+    expect(cheapestFood).toBeLessThanOrEqual(500);
+  });
+
+  it("buying a food item sets ateThisYear and is rebuyable (food is consumed, not owned)", () => {
+    const food = SHOP_ITEMS.find((i) => i.category === "food")!;
+    const c = baseCharacter({ ateThisYear: false, stats: { happiness: 50, health: 50, smarts: 50, looks: 50, naira: 1_000_000 } });
+    const first = buyItem(c, food);
+    expect(first.ateThisYear).toBe(true);
+    expect(first.inventory).not.toContain(food.id);
+    const second = buyItem(first, food); // rebuying the same food item must not be refused
+    expect(second.stats.naira).toBe(first.stats.naira - food.price);
+  });
+
+  it("buying a non-food item still refuses a repeat purchase and adds it to inventory", () => {
+    const item = SHOP_ITEMS.find((i) => i.category !== "food")!;
+    const c = baseCharacter({ stats: { happiness: 50, health: 50, smarts: 50, looks: 50, naira: 1_000_000 } });
+    const bought = buyItem(c, item);
+    expect(bought.inventory).toContain(item.id);
+    expect(buyItem(bought, item)).toBe(bought);
+  });
+});
+
+describe("Age Up food requirement", () => {
+  it("blocks adults/teens from aging up until they've eaten this year", () => {
+    const hungry = baseCharacter({ age: 20, ateThisYear: false, earnedThisYear: 3000, spentThisYear: 3000 });
+    expect(meetsAgeUpRequirements(hungry)).toBe(false);
+    const fed = { ...hungry, ateThisYear: true };
+    expect(meetsAgeUpRequirements(fed)).toBe(true);
+  });
+
+  it("does not require food for infants/children", () => {
+    const hungryKid = baseCharacter({ age: 5, ateThisYear: false, earnedThisYear: 0, spentThisYear: 0 });
+    expect(meetsAgeUpRequirements(hungryKid)).toBe(true);
+  });
+});
+
+describe("talkToClassroomNPC", () => {
+  it("applies the rolled line's delta, logs it, and increments the per-year counter", () => {
+    const teacher = CLASSROOM_NPCS.find((n) => n.role === "teacher")!;
+    const c = baseCharacter({ classroomTalksThisYear: 0 });
+    const result = talkToClassroomNPC(c, teacher);
+    expect(result.line).not.toBeNull();
+    expect(result.character.classroomTalksThisYear).toBe(1);
+    expect(result.character.log.at(-1)).toContain(teacher.name);
+  });
+
+  it("is a no-op past MAX_CLASSROOM_TALKS_PER_YEAR", () => {
+    const teacher = CLASSROOM_NPCS[0];
+    const c = baseCharacter({ classroomTalksThisYear: MAX_CLASSROOM_TALKS_PER_YEAR });
+    const result = talkToClassroomNPC(c, teacher);
+    expect(result.character).toBe(c);
+    expect(result.line).toBeNull();
+  });
+
+  it("ageUp resets the per-year classroom talk cap", () => {
+    const maxedOut = baseCharacter({ classroomTalksThisYear: MAX_CLASSROOM_TALKS_PER_YEAR });
+    expect(ageUp(maxedOut).classroomTalksThisYear).toBe(0);
+  });
+});
+
+describe("ownsVehicle / excludesVehicle chores", () => {
+  it("ownsVehicle is true once any vehicles-category shop item is in inventory", () => {
+    const vehicle = SHOP_ITEMS.find((i) => i.category === "vehicles")!;
+    const withCar = baseCharacter({ inventory: [vehicle.id] });
+    const withoutCar = baseCharacter({ inventory: [] });
+    expect(ownsVehicle(withCar)).toBe(true);
+    expect(ownsVehicle(withoutCar)).toBe(false);
+  });
+
+  it("excludesVehicle chores (commute, keke-squeeze, brt-queue) stop being offered once a vehicle is owned", () => {
+    const vehicle = SHOP_ITEMS.find((i) => i.category === "vehicles")!;
+    const withCar = baseCharacter({ age: 25, inventory: [vehicle.id] });
+    for (let i = 0; i < 20; i++) {
+      const picked = pickChores(withCar, 20);
+      expect(picked.some((c) => c.excludesVehicle)).toBe(false);
+    }
+  });
+
+  it("excludesVehicle chores can still be offered without a vehicle", () => {
+    const withoutCar = baseCharacter({ age: 25, inventory: [] });
+    let everSeen = false;
+    for (let i = 0; i < 30; i++) {
+      if (pickChores(withoutCar, 20).some((c) => c.excludesVehicle)) everSeen = true;
+    }
+    expect(everSeen).toBe(true);
+  });
 });
 
 describe("skills", () => {
@@ -937,8 +1031,8 @@ describe("earn/spend-to-age-up requirement", () => {
     expect(next.earnedThisYear).toBeGreaterThan(0);
   });
 
-  it("is met once both earned and spent reach the band's thresholds", () => {
-    const c = baseCharacter({ age: 20, earnedThisYear: 3000, spentThisYear: 3000 });
+  it("is met once earned, spent, and ate-this-year all reach the band's thresholds", () => {
+    const c = baseCharacter({ age: 20, earnedThisYear: 3000, spentThisYear: 3000, ateThisYear: true });
     expect(meetsAgeUpRequirements(c)).toBe(true);
   });
 

@@ -20,6 +20,7 @@ import type { ShopItem } from "../content/shop";
 import { WEALTH_TIERS, type FaithId, type WealthTierId } from "../content/characterCreation";
 import { PRAYER_FLAVORS, randomFlavor } from "../content/prayers";
 import { SCHOOLS, schoolsAvailableTo, type School } from "../content/schools";
+import { randomClassroomLine, type ClassroomLine, type ClassroomNPC } from "../content/classroom";
 
 export type { AssetId };
 export { bandForAge };
@@ -137,6 +138,15 @@ export interface LifeCharacter {
   // applying for the rest of childhood even if the family's wealth tier
   // wouldn't newly qualify for it today.
   schoolId: string | null;
+  // Whether this character has bought any food-category shop item this
+  // year — Age Up requires it be true past the school-choice window (see
+  // meetsAgeUpRequirements), "the player needs food to eat" per the
+  // design ask. Reset to false at the start of every year in ageUp, same
+  // lifecycle as earnedThisYear/spentThisYear/hustlesThisYear.
+  ateThisYear: boolean;
+  // Capped per year same as hustlesThisYear/prayersThisYear — see
+  // talkToClassroomNPC/MAX_CLASSROOM_TALKS_PER_YEAR.
+  classroomTalksThisYear: number;
 }
 
 export interface LifeStage {
@@ -245,6 +255,8 @@ export function createCharacter(opts: CreateCharacterOptions): LifeCharacter {
     choreGameHistory: {},
     sentTransfers: [],
     schoolId: null,
+    ateThisYear: false,
+    classroomTalksThisYear: 0,
   };
 }
 
@@ -286,16 +298,25 @@ function trackNaira(
 // power of their own, and none of the child-band chores carry a naira
 // cost, so a nonzero requirement there would be an impossible gate, not
 // a meaningful one.
-export const AGE_UP_REQUIREMENTS: Record<AgeBand, { minEarn: number; minSpend: number }> = {
-  infant: { minEarn: 0, minSpend: 0 },
-  child: { minEarn: 0, minSpend: 0 },
-  teen: { minEarn: 200, minSpend: 200 },
-  adult: { minEarn: 3000, minSpend: 3000 },
+// requiresFood matches earn/spend in starting at the teen band — "the
+// player needs food to eat" to age up, per the design ask, satisfiable by
+// buying any food-category shop item that year (see buyItem's isFood
+// branch; the cheapest food item is dirt-cheap, same guarantee the shop
+// already makes for the spend requirement).
+export const AGE_UP_REQUIREMENTS: Record<AgeBand, { minEarn: number; minSpend: number; requiresFood: boolean }> = {
+  infant: { minEarn: 0, minSpend: 0, requiresFood: false },
+  child: { minEarn: 0, minSpend: 0, requiresFood: false },
+  teen: { minEarn: 200, minSpend: 200, requiresFood: true },
+  adult: { minEarn: 3000, minSpend: 3000, requiresFood: true },
 };
 
 export function meetsAgeUpRequirements(character: LifeCharacter): boolean {
   const req = AGE_UP_REQUIREMENTS[bandForAge(character.age)];
-  return character.earnedThisYear >= req.minEarn && character.spentThisYear >= req.minSpend;
+  return (
+    character.earnedThisYear >= req.minEarn &&
+    character.spentThisYear >= req.minSpend &&
+    (!req.requiresFood || character.ateThisYear)
+  );
 }
 
 // Whether a choice should even be offered: a requiresAsset choice needs
@@ -432,6 +453,8 @@ export function ageUp(character: LifeCharacter): LifeCharacter {
     spentThisYear,
     hustlesThisYear: 0,
     prayersThisYear: 0,
+    ateThisYear: false,
+    classroomTalksThisYear: 0,
   };
   const cause = checkDeath(next);
   if (cause) {
@@ -634,15 +657,22 @@ export function availableJobs(character: LifeCharacter): Job[] {
 // Buys a shop item (content/shop.ts) once — no-op if already owned or
 // unaffordable, same "refuse rather than throw" pattern as resolveEvent's
 // unavailable-choice guard.
+// Food items are consumed, not owned — they're always rebuyable (the
+// "already owned, refuse" gate below only applies to durable goods) and
+// don't clutter `inventory`, they just set ateThisYear so Age Up's "the
+// player needs food to eat" requirement (see meetsAgeUpRequirements) is
+// satisfiable through the shop like any other naira-moving action.
 export function buyItem(character: LifeCharacter, item: ShopItem): LifeCharacter {
-  if (character.inventory.includes(item.id) || character.stats.naira < item.price) return character;
+  const isFood = item.category === "food";
+  if ((!isFood && character.inventory.includes(item.id)) || character.stats.naira < item.price) return character;
   const prevNaira = character.stats.naira;
   const stats = applyDelta(character.stats, { ...item.delta, naira: -item.price });
   return {
     ...character,
     stats,
     ...trackNaira(character, prevNaira, stats.naira),
-    inventory: [...character.inventory, item.id],
+    inventory: isFood || character.inventory.includes(item.id) ? character.inventory : [...character.inventory, item.id],
+    ateThisYear: isFood ? true : character.ateThisYear,
     log: [...character.log, `Age ${character.age}: Bought a ${item.name.toLowerCase()}.`],
   };
 }
@@ -733,6 +763,36 @@ export function pray(character: LifeCharacter): PrayerResult {
   const flavorText = randomFlavor(answered ? flavor.answered : flavor.unanswered);
   next.log = [...character.log, `Age ${character.age}: ${flavorText}`];
   return { character: next, answered, flavorText };
+}
+
+// The Classroom (content/classroom.ts) — "speak with teacher and
+// classmates" per the design ask. Capped per year (same shape as
+// hustle()/pray()) so it's a bit of flavor and a small stat nudge, not a
+// free grind; the age gate for showing the tab lives in LifeSim.tsx
+// (school-age years), this cap is enforced here too so the engine can't
+// be bypassed even if a caller skips the UI's filtering.
+export const MAX_CLASSROOM_TALKS_PER_YEAR = 3;
+
+export interface ClassroomTalkResult {
+  character: LifeCharacter;
+  line: ClassroomLine | null;
+}
+
+export function talkToClassroomNPC(character: LifeCharacter, npc: ClassroomNPC): ClassroomTalkResult {
+  if (character.classroomTalksThisYear >= MAX_CLASSROOM_TALKS_PER_YEAR) {
+    return { character, line: null };
+  }
+  const line = randomClassroomLine(npc);
+  const prevNaira = character.stats.naira;
+  const stats = applyDelta(character.stats, line.delta);
+  const next: LifeCharacter = {
+    ...character,
+    stats,
+    ...trackNaira(character, prevNaira, stats.naira),
+    classroomTalksThisYear: character.classroomTalksThisYear + 1,
+    log: [...character.log, `Age ${character.age}: ${npc.name} — ${line.prompt}`],
+  };
+  return { character: next, line };
 }
 
 // "Nobody can send more than 20% of their net worth every 5 years" — a
@@ -861,6 +921,8 @@ const CHARACTER_FIELD_DEFAULTS = {
   faith: "other" as FaithId,
   wealthTier: "middle-class" as WealthTierId,
   inheritance: 0,
+  ateThisYear: false,
+  classroomTalksThisYear: 0,
 };
 
 // Takes whatever was actually in storage — a bare old-shape character

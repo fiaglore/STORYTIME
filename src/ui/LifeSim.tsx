@@ -22,6 +22,7 @@ import {
   reviveCharacter,
   rollWealthTier,
   takeJob,
+  talkToClassroomNPC,
   treatInjury,
   MAX_PRAYERS_PER_YEAR,
   trainSkill,
@@ -29,6 +30,7 @@ import {
   AGE_UP_REQUIREMENTS,
   CRITICAL_HEALTH_THRESHOLD,
   JOBS,
+  MAX_CLASSROOM_TALKS_PER_YEAR,
   MAX_HUSTLES_PER_YEAR,
   REVIVE_COST,
   SAVE_VERSION,
@@ -42,6 +44,7 @@ import type { Chore, ChoreGameVariant } from "../content/chores";
 import { SHOP_CATEGORIES, SHOP_ITEMS, type ShopCategory, type ShopItem } from "../content/shop";
 import { SKILLS, SKILL_TRAIN_COST, type Skill } from "../content/skills";
 import { schoolsAvailableTo, type School } from "../content/schools";
+import { CLASSROOM_NPCS, type ClassroomNPC } from "../content/classroom";
 import {
   FAITHS,
   WEALTH_TIERS,
@@ -75,6 +78,17 @@ const INTERVIEW_BONUS: Record<InterviewResult, { naira?: number; happiness?: num
 // becomes unscannable — cap what's shown at once and tell the player to
 // narrow their search/category when there's more.
 const SHOP_DISPLAY_LIMIT = 40;
+
+// The Classroom tab shows through the teen years (not just the formal
+// AGE_SCHOOL_CHOICE_CUTOFF=10 school-cost/benefit window) — schooling
+// continues through the teen band even though the ongoing naira cost in
+// ageUp stops applying past the cutoff, so "speak with teacher and
+// classmates" stays available as long as there's a school to be talking
+// about. Floored at 3 (the start of the "child" age band) since the
+// infant band intentionally has no chores/events — babies don't make
+// choices or hold conversations either.
+const CLASSROOM_MIN_AGE = 3;
+const CLASSROOM_MAX_AGE = 17;
 
 function formatNaira(amount: number): string {
   const sign = amount > 0 ? "+" : amount < 0 ? "-" : "";
@@ -188,6 +202,8 @@ export function LifeSim({ onExit }: Props) {
   const [shopSearch, setShopSearch] = useState("");
   const [showSkills, setShowSkills] = useState(false);
   const [showMarriage, setShowMarriage] = useState(false);
+  const [showClassroom, setShowClassroom] = useState(false);
+  const [classroomMessage, setClassroomMessage] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [pendingJob, setPendingJob] = useState<JobId | null>(null);
   // Persisted alongside the character (see loadSavedBundle/persist) so a
@@ -323,6 +339,13 @@ export function LifeSim({ onExit }: Props) {
     if (result.flavorText) setPrayerMessage(result.flavorText);
   };
 
+  const handleTalkToClassroomNPC = (npc: ClassroomNPC) => {
+    if (!character) return;
+    const result = talkToClassroomNPC(character, npc);
+    setCharacter(result.character);
+    if (result.line) setClassroomMessage(`${npc.name}: ${result.line.prompt}`);
+  };
+
   const handleAgeUp = () => {
     if (
       !character ||
@@ -401,6 +424,8 @@ export function LifeSim({ onExit }: Props) {
     setShowSkills(false);
     setShowMarriage(false);
     setShowSettings(false);
+    setShowClassroom(false);
+    setClassroomMessage(null);
   };
 
   if (!character) {
@@ -695,6 +720,7 @@ export function LifeSim({ onExit }: Props) {
               setShowSkills(false);
               setShowMarriage(false);
               setShowSettings(false);
+              setShowClassroom(false);
             }}
           >
             {job ? "Change job" : "Get a job"}
@@ -708,6 +734,7 @@ export function LifeSim({ onExit }: Props) {
             setShowSkills(false);
             setShowMarriage(false);
             setShowSettings(false);
+            setShowClassroom(false);
           }}
         >
           Shop
@@ -720,10 +747,26 @@ export function LifeSim({ onExit }: Props) {
             setShowShop(false);
             setShowMarriage(false);
             setShowSettings(false);
+            setShowClassroom(false);
           }}
         >
           Skills
         </button>
+        {character.schoolId && character.age >= CLASSROOM_MIN_AGE && character.age <= CLASSROOM_MAX_AGE && (
+          <button
+            className={`lifesim-tab ${showClassroom ? "lifesim-tab--active" : ""}`}
+            onClick={() => {
+              setShowClassroom((s) => !s);
+              setShowJobs(false);
+              setShowShop(false);
+              setShowSkills(false);
+              setShowMarriage(false);
+              setShowSettings(false);
+            }}
+          >
+            Classroom
+          </button>
+        )}
         {uid && character.age >= 18 && (
           <button
             className={`lifesim-tab ${showMarriage ? "lifesim-tab--active" : ""}`}
@@ -733,6 +776,7 @@ export function LifeSim({ onExit }: Props) {
               setShowShop(false);
               setShowSkills(false);
               setShowSettings(false);
+              setShowClassroom(false);
             }}
           >
             {character.spouseUid ? "💍" : "Marriage"}
@@ -746,6 +790,7 @@ export function LifeSim({ onExit }: Props) {
             setShowShop(false);
             setShowSkills(false);
             setShowMarriage(false);
+            setShowClassroom(false);
           }}
         >
           ⚙️ Settings
@@ -846,6 +891,29 @@ export function LifeSim({ onExit }: Props) {
 
       {showMarriage && uid && (
         <LifeSimSocial character={character} uid={uid} onUpdateCharacter={setCharacter} />
+      )}
+
+      {showClassroom && (
+        <div className="lifesim-classroom">
+          <p className="lifesim-hint">
+            {character.classroomTalksThisYear >= MAX_CLASSROOM_TALKS_PER_YEAR
+              ? "No more time to chat this year — the bell's gone."
+              : `${MAX_CLASSROOM_TALKS_PER_YEAR - character.classroomTalksThisYear} chat${
+                  MAX_CLASSROOM_TALKS_PER_YEAR - character.classroomTalksThisYear === 1 ? "" : "s"
+                } left today`}
+          </p>
+          {CLASSROOM_NPCS.map((npc) => (
+            <button
+              key={npc.id}
+              className="rpg-choice-pill"
+              onClick={() => handleTalkToClassroomNPC(npc)}
+              disabled={character.classroomTalksThisYear >= MAX_CLASSROOM_TALKS_PER_YEAR}
+            >
+              {npc.role === "teacher" ? "🧑‍🏫" : "🧑‍🎓"} Talk to {npc.name}
+            </button>
+          ))}
+          {classroomMessage && <p className="lifesim-prayer__message">{classroomMessage}</p>}
+        </div>
       )}
 
       {showSettings && (
@@ -959,6 +1027,11 @@ export function LifeSim({ onExit }: Props) {
                   />
                 </div>
               </div>
+              {req.requiresFood && (
+                <p className={`lifesim-requirement__food ${character.ateThisYear ? "lifesim-requirement__food--done" : ""}`}>
+                  {character.ateThisYear ? "✓ You've eaten this year." : "You haven't eaten this year — buy food from the Shop."}
+                </p>
+              )}
               <button
                 className="choice-button"
                 onClick={handleHustle}

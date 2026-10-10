@@ -238,6 +238,40 @@ the single surviving mode, `src/ui/LifeSim.tsx`.
   phone" — that was a real bug, chores used to be picked on age band alone.
   Any new chore that implies a particular standard of living needs one of
   these fields, not just a plausible-sounding `bands` entry.
+- Shop items aren't just flavor purchases — two of them gate survival.
+  `AGE_UP_REQUIREMENTS`'s `requiresFood` (true for `teen`/`adult`, false
+  for `infant`/`child`) adds a third Age Up gate alongside earn/spend:
+  `LifeCharacter.ateThisYear` resets to `false` every `ageUp` and only
+  flips `true` when `buyItem` sells a `category: "food"` item;
+  `meetsAgeUpRequirements` refuses to pass while it's `false` and the
+  band requires it. Food items are the one shop exception to the
+  "already-owned is a no-op" rule in `buyItem` — they're consumed, not
+  collected, so they stay buyable every year rather than being a
+  one-time purchase. A vehicle (any `category: "vehicles"` item) instead
+  gates chores, not Age Up: `ownsVehicle(character)` in `content/
+  chores.ts` checks `inventory` against `SHOP_ITEMS`, and `Chore.
+  excludesVehicle` (tagged on `commute`/`keke-squeeze`/`brt-queue`) keeps
+  `isChoreRelevant` from offering transport-hardship chores to a
+  character who's bought their way out of needing them — same direction
+  as the existing `requiresAsset`/`excludesAsset` chore gates, just keyed
+  off the shop instead of event-granted assets.
+- Classroom (`src/content/classroom.ts`, the "Classroom" tab in
+  `LifeSim.tsx`) is "a section for classrooms where they can speak with
+  teacher and classmates" per the design ask — deliberately a fixed cast
+  of NPCs (`CLASSROOM_NPCS`: one teacher, three classmates, each with a
+  handful of flavor lines picked at random by `talkToClassroomNPC`),
+  **not** a second real-player chat surface. Lagos Life's real
+  player-to-player features (Marriage, chat, send money) are all gated
+  to signed-in adults (age >= 18 — see "Marriage" below); a second
+  real-time multiplayer surface for school-age characters would need the
+  same safety-rail investment the real chat already has (profanity
+  filter, rate limit, block, report — see "Chat" below), so this stays
+  NPC-only. Shown whenever `character.schoolId` is set and age is within
+  `[CLASSROOM_MIN_AGE, CLASSROOM_MAX_AGE]` (3 to 17) — floored at 3, not
+  0, because the infant band intentionally has no chores/events either
+  (babies don't make choices or hold conversations); capped at
+  `MAX_CLASSROOM_TALKS_PER_YEAR` (3), reset every `ageUp` like every
+  other per-year counter in this file.
 - Run `npm test` and `npm run build` before finishing any task.
 
 - `src/ui/Settings.tsx` is one of the tabs in `LifeSim.tsx` (alongside

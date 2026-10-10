@@ -1,5 +1,16 @@
 import { bandForAge, type AgeBand, type AssetId, type StatDelta } from "./lifeEvents";
+import { SHOP_ITEMS } from "./shop";
 import type { LifeCharacter } from "../engine/lifeSim";
+
+// Whether the character owns any shop item from the "vehicles" category —
+// "a car to go around with" per the design ask. Checked against
+// LifeCharacter.inventory (shop purchases), not the separate `assets`
+// list (generator/pos-business/borehole), since vehicles are bought
+// through the shop like any other item.
+export function ownsVehicle(character: LifeCharacter): boolean {
+  const vehicleIds = new Set(SHOP_ITEMS.filter((i) => i.category === "vehicles").map((i) => i.id));
+  return character.inventory.some((id) => vehicleIds.has(id));
+}
 
 // Daily tasks a Lagos Life character has to clear before Age Up is
 // available for the year. Unlike LIFE_EVENTS (branching choices, bigger
@@ -48,6 +59,13 @@ export interface Chore {
   // for water once you own a borehole, or charge your phone at a kiosk
   // once you own a generator.
   excludesAsset?: AssetId;
+  // Never offered once the character owns any shop "vehicles" item — see
+  // ownsVehicle. Marks the transport-by-public-means chores (go-slow
+  // queues, squeezing into a keke, fuel queues for someone else's
+  // generator-adjacent errands) that owning your own car makes moot —
+  // "a car to go around with" mattering mechanically, not just a one-time
+  // stat bump, per the design ask.
+  excludesVehicle?: boolean;
 }
 
 export const CHORES: Chore[] = [
@@ -58,7 +76,7 @@ export const CHORES: Chore[] = [
   { id: "errand-shop", bands: ["child", "teen"], text: "Run to the corner shop for Mama — she's counting the change.", delta: {}, category: "errands" },
   { id: "charge-phone", bands: ["teen", "adult"], text: "Queue at the kiosk to charge your phone.", delta: { naira: -100 }, category: "errands", maxNaira: 500_000, excludesAsset: "generator" },
   { id: "check-family", bands: ["teen", "adult"], text: "Call to check on the family back home.", delta: { happiness: 1 }, category: "errands" },
-  { id: "commute", bands: ["adult"], text: "Battle the morning go-slow to get to work.", delta: { happiness: -1 }, category: "labor" },
+  { id: "commute", bands: ["adult"], text: "Battle the morning go-slow to get to work.", delta: { happiness: -1 }, category: "labor", excludesVehicle: true },
   { id: "cook-dinner", bands: ["adult"], text: "Cook dinner before NEPA takes the light again.", delta: {}, category: "errands" },
   { id: "bank-queue", bands: ["adult"], text: "Queue at the bank just to withdraw cash.", delta: { happiness: -1 }, category: "finance", maxNaira: 2_000_000 },
   { id: "market-run", bands: ["adult"], text: "Run to the market for the week's foodstuff.", delta: { naira: -2000 }, category: "finance", maxNaira: 2_000_000 },
@@ -68,11 +86,11 @@ export const CHORES: Chore[] = [
   { id: "call-landlord", bands: ["adult"], text: "Dodge the landlord's call about the gutter repair levy.", delta: { happiness: -1 }, category: "errands" },
   { id: "data-bundle", bands: ["teen", "adult"], text: "Your data don finish mid-download — top up again.", delta: { naira: -1000 }, category: "errands" },
   { id: "waste-collector", bands: ["adult"], text: "Pay the waste collector boy before he vexes.", delta: { naira: -500 }, category: "finance" },
-  { id: "keke-squeeze", bands: ["adult"], text: "Squeeze into a keke to beat the morning rush.", delta: { naira: -300 }, category: "labor", maxNaira: 800_000 },
+  { id: "keke-squeeze", bands: ["adult"], text: "Squeeze into a keke to beat the morning rush.", delta: { naira: -300 }, category: "labor", maxNaira: 800_000, excludesVehicle: true },
   { id: "manage-staff", bands: ["adult"], text: "Settle a dispute between your driver and the gateman.", delta: { happiness: -1 }, category: "finance", minNaira: 1_000_000 },
   { id: "society-call", bands: ["adult"], text: "An \"old friend\" who just heard you're doing well calls to catch up.", delta: { happiness: -1, naira: -5000 }, category: "finance", minNaira: 2_000_000 },
   { id: "generator-maintenance", bands: ["adult"], text: "The generator needs servicing before it packs up on you.", delta: { naira: -2000 }, category: "finance", requiresAsset: "generator" },
-  { id: "brt-queue", bands: ["adult"], text: "Join the BRT queue — it's long, but it's the cheapest way to work.", delta: { happiness: -1 }, category: "labor", maxNaira: 1_000_000 },
+  { id: "brt-queue", bands: ["adult"], text: "Join the BRT queue — it's long, but it's the cheapest way to work.", delta: { happiness: -1 }, category: "labor", maxNaira: 1_000_000, excludesVehicle: true },
 ];
 
 // Picks chores that are actually relevant to this character right now —
@@ -93,5 +111,6 @@ function isChoreRelevant(chore: Chore, character: LifeCharacter, band: AgeBand):
   if (chore.minNaira != null && character.stats.naira < chore.minNaira) return false;
   if (chore.requiresAsset && !character.assets.includes(chore.requiresAsset)) return false;
   if (chore.excludesAsset && character.assets.includes(chore.excludesAsset)) return false;
+  if (chore.excludesVehicle && ownsVehicle(character)) return false;
   return true;
 }

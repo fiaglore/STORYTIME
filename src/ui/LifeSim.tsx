@@ -19,6 +19,7 @@ import {
   recordChoreGamePlayed,
   resolveChore,
   resolveEvent,
+  retire,
   reviveCharacter,
   rollWealthTier,
   takeJob,
@@ -32,6 +33,8 @@ import {
   JOBS,
   MAX_CLASSROOM_TALKS_PER_YEAR,
   MAX_HUSTLES_PER_YEAR,
+  PENSION_ANNUITY_RATE,
+  RETIREMENT_AGE,
   REVIVE_COST,
   SAVE_VERSION,
   TREATMENT_COST,
@@ -397,6 +400,12 @@ export function LifeSim({ onExit }: Props) {
     setPendingJob(null);
   };
 
+  const handleRetire = () => {
+    if (!character) return;
+    setShowJobs(false);
+    setCharacter(retire(character));
+  };
+
   const handleRevive = () => {
     if (!character) return;
     setCharacter(reviveCharacter(character));
@@ -694,7 +703,13 @@ export function LifeSim({ onExit }: Props) {
         </div>
       )}
 
-      <p className="lifesim-job">{job ? `Working as a ${job.title}` : "No job yet"}</p>
+      <p className="lifesim-job">
+        {character.retired
+          ? `Retired — drawing ₦${character.pensionPerYear.toLocaleString()}/yr pension (₦${character.pensionSavings.toLocaleString()} left)`
+          : job
+            ? `Working as a ${job.title}`
+            : "No job yet"}
+      </p>
 
       <div className="lifesim-prayer">
         <button
@@ -711,7 +726,7 @@ export function LifeSim({ onExit }: Props) {
       </div>
 
       <div className="lifesim-tabs">
-        {character.age >= 18 && (
+        {character.age >= 18 && !character.retired && (
           <button
             className={`lifesim-tab ${showJobs ? "lifesim-tab--active" : ""}`}
             onClick={() => {
@@ -810,6 +825,13 @@ export function LifeSim({ onExit }: Props) {
           ))}
           {availableJobs(character).every((j) => j.id === "hawker") && (
             <p className="lifesim-hint">Train a skill to unlock better-paying work.</p>
+          )}
+          {job && character.age >= RETIREMENT_AGE && (
+            <button className="rpg-choice-pill" onClick={handleRetire}>
+              Retire — ~₦
+              {Math.round(character.pensionSavings * PENSION_ANNUITY_RATE).toLocaleString()}/yr pension (₦
+              {character.pensionSavings.toLocaleString()} saved)
+            </button>
           )}
         </div>
       )}

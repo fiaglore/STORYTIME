@@ -147,6 +147,20 @@ export interface LifeCharacter {
   // Capped per year same as hustlesThisYear/prayersThisYear — see
   // talkToClassroomNPC/MAX_CLASSROOM_TALKS_PER_YEAR.
   classroomTalksThisYear: number;
+  // A contributory pension pot — see PENSION_CONTRIBUTION_RATE below.
+  // Grows every year a character has a job; once retired, it's drawn down
+  // by pensionPerYear each year instead of growing. Separate from
+  // stats.naira so it isn't spendable like take-home pay, same as a real
+  // pension fund.
+  pensionSavings: number;
+  // Set once by retire() and never recalculated afterwards — the pot's
+  // size at the moment of retirement decides the payout for the rest of
+  // retirement, same as a real annuity. 0 while still working.
+  pensionPerYear: number;
+  // True once retire() has been called — job is forced to "none" and
+  // ageUp pays pensionPerYear (drawn from pensionSavings) instead of job
+  // income from then on.
+  retired: boolean;
 }
 
 export interface LifeStage {
@@ -257,6 +271,9 @@ export function createCharacter(opts: CreateCharacterOptions): LifeCharacter {
     schoolId: null,
     ateThisYear: false,
     classroomTalksThisYear: 0,
+    pensionSavings: 0,
+    pensionPerYear: 0,
+    retired: false,
   };
 }
 
@@ -420,7 +437,17 @@ export function checkDeath(character: LifeCharacter): string | null {
 export function ageUp(character: LifeCharacter): LifeCharacter {
   if (!character.alive) return character;
   const nextAge = character.age + 1;
-  const income = jobIncome(character.job);
+  const jobPay = jobIncome(character.job);
+  // Retired: income is this year's pension draw (capped at what's left in
+  // the pot, not pensionPerYear itself — the pot can run out before the
+  // character does); still working: pensionSavings grows by a cut of this
+  // year's pay instead. The two are mutually exclusive since retire()
+  // forces job to "none".
+  const pensionPayout = character.retired ? Math.min(character.pensionPerYear, character.pensionSavings) : 0;
+  const income = character.retired ? pensionPayout : jobPay;
+  const pensionSavings = character.retired
+    ? character.pensionSavings - pensionPayout
+    : character.pensionSavings + Math.round(jobPay * PENSION_CONTRIBUTION_RATE);
   const school = character.schoolId ? SCHOOLS.find((s) => s.id === character.schoolId) : undefined;
   // School costs/benefits only apply through the school-choice age window —
   // schoolId itself is never cleared (see its doc comment), but a
@@ -448,6 +475,7 @@ export function ageUp(character: LifeCharacter): LifeCharacter {
     ...character,
     age: nextAge,
     stats,
+    pensionSavings,
     streak: nextStreak(character.streak, stats.health),
     earnedThisYear: income > 0 ? income : 0,
     spentThisYear,
@@ -456,6 +484,14 @@ export function ageUp(character: LifeCharacter): LifeCharacter {
     ateThisYear: false,
     classroomTalksThisYear: 0,
   };
+  // One-time flavor line the year the pot actually empties, not every
+  // year after — real pension-delay/exhaustion precarity, not spam.
+  if (character.retired && character.pensionSavings > 0 && pensionSavings <= 0) {
+    next.log = [
+      ...next.log,
+      `Age ${nextAge}: Your pension savings have run dry — you're on your own now.`,
+    ];
+  }
   const cause = checkDeath(next);
   if (cause) {
     next.alive = false;
@@ -639,8 +675,12 @@ function isJobAvailable(character: LifeCharacter, job: Job): boolean {
 
 // Refuses (rather than throws) the same way resolveEvent does for a choice
 // gated by isChoiceAvailable — a caller that skips availableJobs' filtering
-// still can't assign a job the character doesn't qualify for.
+// still can't assign a job the character doesn't qualify for. Also refuses
+// once retired — retirement is a one-way door in this model (same as a
+// real pension cash-out), so a retired character can't be bounced back
+// into employment by a caller that skips the Jobs tab's own hiding of it.
 export function takeJob(character: LifeCharacter, job: JobId): LifeCharacter {
+  if (character.retired) return character;
   const def = JOBS.find((j) => j.id === job);
   if (!def || !isJobAvailable(character, def)) return character;
   return {
@@ -652,6 +692,45 @@ export function takeJob(character: LifeCharacter, job: JobId): LifeCharacter {
 
 export function availableJobs(character: LifeCharacter): Job[] {
   return JOBS.filter((j) => isJobAvailable(character, j));
+}
+
+// The Nigerian Contributory Pension Scheme's actual retirement age (civil
+// service) is 60 — matches LIFE_STAGES' "elder" band start, not a
+// coincidence, both mark the same real-world milestone.
+export const RETIREMENT_AGE = 60;
+
+// Share of each year's job income set aside into pensionSavings on top of
+// take-home pay (modeled as the combined employee+employer contribution,
+// simplified into one rate) — doesn't touch stats.naira/earnedThisYear,
+// so it can't interact with AGE_UP_REQUIREMENTS or the hustle() floor
+// regression test; it's a side ledger until retire() cashes it out.
+export const PENSION_CONTRIBUTION_RATE = 0.18;
+
+// Fraction of the accumulated pot paid out per retired year, fixed at the
+// moment of retirement — a ~5.5-year full drawdown at this rate, after
+// which pensionPerYear still applies but pensionSavings has run out and
+// ageUp pays whatever's left (down to 0). A bigger pot (more years
+// worked, better-paying jobs) means a bigger yearly payout AND a longer
+// runway, same direction as real contributory pensions.
+export const PENSION_ANNUITY_RATE = 0.18;
+
+// Refuses (rather than throws) the same way every other gated mutator
+// here does: too young, already retired, or never had a job to retire
+// from (informal/no-job characters have no pensionSavings to annuitize).
+// One-way — see takeJob's refusal of a retired character re-employing.
+export function retire(character: LifeCharacter): LifeCharacter {
+  if (character.retired || character.age < RETIREMENT_AGE || character.job === "none") return character;
+  const title = JOBS.find((j) => j.id === character.job)?.title ?? "work";
+  return {
+    ...character,
+    job: "none",
+    retired: true,
+    pensionPerYear: Math.round(character.pensionSavings * PENSION_ANNUITY_RATE),
+    log: [
+      ...character.log,
+      `Age ${character.age}: Retired from ${title.toLowerCase()} — drawing a yearly pension.`,
+    ],
+  };
 }
 
 // Buys a shop item (content/shop.ts) once — no-op if already owned or
@@ -896,7 +975,7 @@ export function changeFaith(character: LifeCharacter, faith: FaithId): LifeChara
 // number itself isn't branched on anywhere, it's just there for the day a
 // real structural migration (not just "fill in a missing field") is
 // needed and something has to tell saves apart.
-export const SAVE_VERSION = 1;
+export const SAVE_VERSION = 2;
 
 export interface SaveFile {
   version: number;
@@ -923,6 +1002,9 @@ const CHARACTER_FIELD_DEFAULTS = {
   inheritance: 0,
   ateThisYear: false,
   classroomTalksThisYear: 0,
+  pensionSavings: 0,
+  pensionPerYear: 0,
+  retired: false,
 };
 
 // Takes whatever was actually in storage — a bare old-shape character

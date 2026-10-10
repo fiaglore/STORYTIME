@@ -21,6 +21,7 @@ import {
   recordChoreGamePlayed,
   resolveChore,
   resolveEvent,
+  retire,
   reviveCharacter,
   rollWealthTier,
   sendMoney,
@@ -34,6 +35,9 @@ import {
   MAX_CLASSROOM_TALKS_PER_YEAR,
   MAX_HUSTLES_PER_YEAR,
   MAX_PRAYERS_PER_YEAR,
+  PENSION_ANNUITY_RATE,
+  PENSION_CONTRIBUTION_RATE,
+  RETIREMENT_AGE,
   REVIVE_COST,
   SAVE_VERSION,
   TREATMENT_COST,
@@ -77,6 +81,9 @@ function baseCharacter(overrides: Partial<LifeCharacter> = {}): LifeCharacter {
     choreGameHistory: {},
     ateThisYear: false,
     classroomTalksThisYear: 0,
+    pensionSavings: 0,
+    pensionPerYear: 0,
+    retired: false,
     ...overrides,
   };
 }
@@ -495,6 +502,97 @@ describe("jobs", () => {
   });
 });
 
+describe("retire / pension", () => {
+  it("accrues pensionSavings every year a character has a job, without touching naira or earnedThisYear", () => {
+    const worker = baseCharacter({ age: 25, job: "hawker", stats: { happiness: 50, health: 50, smarts: 50, looks: 50, naira: 0 } });
+    const aged = ageUp(worker);
+    const hawkerPay = availableJobs(aged).find((j) => j.id === "hawker")!.payPerYear;
+    expect(aged.pensionSavings).toBe(Math.round(hawkerPay * PENSION_CONTRIBUTION_RATE));
+    // Job income still lands in naira/earnedThisYear exactly as before —
+    // the pension cut is a separate side ledger, not a deduction.
+    expect(aged.stats.naira).toBe(hawkerPay);
+    expect(aged.earnedThisYear).toBe(hawkerPay);
+  });
+
+  it("refuses to retire below RETIREMENT_AGE, without a job, or if already retired", () => {
+    const tooYoung = baseCharacter({ age: RETIREMENT_AGE - 1, job: "hawker", pensionSavings: 500_000 });
+    expect(retire(tooYoung)).toBe(tooYoung);
+
+    const noJob = baseCharacter({ age: RETIREMENT_AGE, job: "none", pensionSavings: 500_000 });
+    expect(retire(noJob)).toBe(noJob);
+
+    const alreadyRetired = baseCharacter({ age: RETIREMENT_AGE, job: "hawker", retired: true, pensionSavings: 500_000 });
+    expect(retire(alreadyRetired)).toBe(alreadyRetired);
+  });
+
+  it("retiring clears the job, sets retired, and annuitizes the current pot into pensionPerYear", () => {
+    const worker = baseCharacter({ age: RETIREMENT_AGE, job: "hawker", pensionSavings: 1_000_000 });
+    const retiree = retire(worker);
+    expect(retiree.job).toBe("none");
+    expect(retiree.retired).toBe(true);
+    expect(retiree.pensionPerYear).toBe(Math.round(1_000_000 * PENSION_ANNUITY_RATE));
+    // The pot itself isn't touched by retiring — only ageUp draws it down.
+    expect(retiree.pensionSavings).toBe(1_000_000);
+  });
+
+  it("takeJob refuses to re-employ a retired character even bypassing the UI's hiding of the Jobs tab", () => {
+    const retiree = baseCharacter({ age: RETIREMENT_AGE, job: "none", retired: true, pensionPerYear: 100_000, pensionSavings: 500_000 });
+    const next = takeJob(retiree, "hawker");
+    expect(next).toBe(retiree);
+  });
+
+  it("ageUp pays the retiree's pensionPerYear as income and draws down pensionSavings", () => {
+    const retiree = baseCharacter({
+      age: RETIREMENT_AGE,
+      job: "none",
+      retired: true,
+      pensionPerYear: 180_000,
+      pensionSavings: 1_000_000,
+      stats: { happiness: 50, health: 50, smarts: 50, looks: 50, naira: 0 },
+    });
+    const aged = ageUp(retiree);
+    expect(aged.stats.naira).toBe(180_000);
+    expect(aged.earnedThisYear).toBe(180_000);
+    expect(aged.pensionSavings).toBe(1_000_000 - 180_000);
+  });
+
+  it("the pension draw never exceeds what's left in the pot, and floors at 0 rather than going negative", () => {
+    const almostEmpty = baseCharacter({
+      age: RETIREMENT_AGE,
+      job: "none",
+      retired: true,
+      pensionPerYear: 180_000,
+      pensionSavings: 50_000,
+      stats: { happiness: 50, health: 50, smarts: 50, looks: 50, naira: 0 },
+    });
+    const aged = ageUp(almostEmpty);
+    expect(aged.stats.naira).toBe(50_000);
+    expect(aged.pensionSavings).toBe(0);
+
+    // Once truly exhausted, further years pay nothing rather than erroring
+    // or going negative.
+    const exhausted = ageUp(aged);
+    expect(exhausted.stats.naira).toBe(50_000); // unchanged — no further income
+    expect(exhausted.pensionSavings).toBe(0);
+  });
+
+  it("logs a one-time flavor line the exact year the pension pot empties, not every year after", () => {
+    const almostEmpty = baseCharacter({
+      age: RETIREMENT_AGE,
+      job: "none",
+      retired: true,
+      pensionPerYear: 180_000,
+      pensionSavings: 50_000,
+    });
+    const exhaustedYear = ageUp(almostEmpty);
+    expect(exhaustedYear.log.some((l) => l.includes("run dry"))).toBe(true);
+
+    const nextYear = ageUp(exhaustedYear);
+    const dryLines = nextYear.log.filter((l) => l.includes("run dry"));
+    expect(dryLines).toHaveLength(1);
+  });
+});
+
 const creationOpts = (overrides: Partial<Parameters<typeof createCharacter>[0]> = {}) => ({
   name: "Ada",
   birthDate: "2000-01-01",
@@ -862,6 +960,9 @@ describe("migrateCharacter", () => {
     delete stripped.schoolId;
     delete stripped.prayersThisYear;
     delete stripped.choreSkills;
+    delete stripped.pensionSavings;
+    delete stripped.pensionPerYear;
+    delete stripped.retired;
     const migrated = migrateCharacter(stripped);
     expect(migrated).not.toBeNull();
     expect(migrated!.choreGameHistory).toEqual({});
@@ -869,6 +970,9 @@ describe("migrateCharacter", () => {
     expect(migrated!.schoolId).toBeNull();
     expect(migrated!.prayersThisYear).toBe(0);
     expect(migrated!.choreSkills).toEqual({ labor: 0, errands: 0, finance: 0 });
+    expect(migrated!.pensionSavings).toBe(0);
+    expect(migrated!.pensionPerYear).toBe(0);
+    expect(migrated!.retired).toBe(false);
   });
 
   it("unwraps a {version, character} save file too", () => {

@@ -272,6 +272,31 @@ the single surviving mode, `src/ui/LifeSim.tsx`.
   (babies don't make choices or hold conversations); capped at
   `MAX_CLASSROOM_TALKS_PER_YEAR` (3), reset every `ageUp` like every
   other per-year counter in this file.
+- Retirement/pension: `RETIREMENT_AGE` (60, matching both the real
+  Nigerian Contributory Pension Scheme's civil-service retirement age and
+  `LIFE_STAGES`' "elder" band start — not a coincidence) is when the
+  "Retire" option appears in the Jobs tab for an employed character.
+  `ageUp` grows `LifeCharacter.pensionSavings` by
+  `PENSION_CONTRIBUTION_RATE` (18%) of every year's job income as a side
+  ledger — it doesn't touch `stats.naira`/`earnedThisYear`, so it can't
+  interact with `AGE_UP_REQUIREMENTS` or the `hustle()` floor regression
+  test. `retire()` is one-way (refuses rather than throws if already
+  retired, too young, or never had a job — same "refuse rather than
+  throw" pattern as every other gated mutator here): it clears `job` to
+  `"none"`, sets `retired: true`, and annuitizes the pot at that instant
+  into a fixed `pensionPerYear` (`PENSION_ANNUITY_RATE`, 18%/yr) that
+  doesn't get recalculated afterward — a bigger pot (more years worked,
+  better-paying jobs) means both a bigger yearly payout and a longer
+  runway, same direction as a real contributory pension. From then on
+  `ageUp` pays `min(pensionPerYear, pensionSavings)` as that year's
+  income and draws the pot down by the same amount, flooring at 0 rather
+  than going negative — once it hits 0, retirement pays nothing further
+  (a one-time "Your pension savings have run dry" log line marks the
+  exact year this happens, not every year after). `takeJob` refuses to
+  re-employ a retired character, same "can't be bypassed even if a
+  caller skips the UI's filtering" principle as `resolveEvent`/
+  `isChoiceAvailable` — the Jobs tab itself is hidden once retired since
+  there's nothing left to do there.
 - Run `npm test` and `npm run build` before finishing any task.
 
 - `src/ui/Settings.tsx` is one of the tabs in `LifeSim.tsx` (alongside

@@ -1157,7 +1157,8 @@
 }
 
 .lifesim-shop,
-.lifesim-skills {
+.lifesim-skills,
+.lifesim-settings {
   display: flex;
   flex-direction: column;
   gap: 0.6rem;

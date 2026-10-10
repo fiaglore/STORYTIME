@@ -170,6 +170,19 @@ the single surviving mode, `src/ui/LifeSim.tsx`.
   these fields, not just a plausible-sounding `bands` entry.
 - Run `npm test` and `npm run build` before finishing any task.
 
+- `src/ui/Settings.tsx` is one of the tabs in `LifeSim.tsx` (alongside
+  Shop/Skills/Marriage), not a separate screen — rebuilt from scratch for
+  this game mode (the pre-removal `Settings.tsx` was entirely coupled to
+  the removed story mode's Zustand store). It holds theme (light/dark/
+  match-device, persisted to `localStorage` under
+  `storytime-lagos:theme` and applied via `document.documentElement`'s
+  `data-theme` attribute — `index.css`'s `:root[data-theme="light"]`/
+  `[data-theme="dark"]` blocks already existed for this, just had no UI
+  to set them before), faith (`changeFaith` in `lifeSim.ts` — flavor-only,
+  changes which `PRAYER_FLAVORS` text `pray()` picks, not the mechanic),
+  the `AccountSection` sign-in widget, blocked-player unblocking, and a
+  confirm-gated "Start a new life" reset.
+
 ## Firebase / cloud save
 
 Optional: if `VITE_FIREBASE_*` env vars aren't set, `firebaseEnabled` is

@@ -641,3 +641,12 @@ export function blockPlayer(character: LifeCharacter, uid: string): LifeCharacte
 export function unblockPlayer(character: LifeCharacter, uid: string): LifeCharacter {
   return { ...character, blockedUids: character.blockedUids.filter((u) => u !== uid) };
 }
+
+// A player can change their mind about their faith after character
+// creation — Settings.tsx's Faith section. Flavor-only, same as faith
+// being set at creation: it only changes which PRAYER_FLAVORS text pray()
+// picks, not the mechanic itself.
+export function changeFaith(character: LifeCharacter, faith: FaithId): LifeCharacter {
+  if (character.faith === faith) return character;
+  return { ...character, faith };
+}

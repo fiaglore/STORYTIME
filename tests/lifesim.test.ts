@@ -5,6 +5,7 @@ import {
   availableJobs,
   blockPlayer,
   buyItem,
+  changeFaith,
   checkDeath,
   createCharacter,
   hustle,
@@ -668,6 +669,19 @@ describe("pray", () => {
     const c = baseCharacter({ faith: "muslim" });
     const result = pray(c);
     expect(result.character.log.at(-1)).toContain(result.flavorText);
+  });
+});
+
+describe("changeFaith", () => {
+  it("updates the character's faith", () => {
+    const c = baseCharacter({ faith: "christian" });
+    const next = changeFaith(c, "muslim");
+    expect(next.faith).toBe("muslim");
+  });
+
+  it("is a no-op (same reference) when the faith doesn't change", () => {
+    const c = baseCharacter({ faith: "atheist" });
+    expect(changeFaith(c, "atheist")).toBe(c);
   });
 });
 

@@ -1,5 +1,6 @@
 import chapters from "../content/chapters.json";
 import { ChapterCard } from "./ChapterCard";
+import { ProgressBar } from "./ProgressBar";
 import { useGameStore } from "../engine/store";
 import type { Chapter } from "../content/types";
 
@@ -19,6 +20,10 @@ export function MapHub({ onSelect, onOpenEndings, onOpenSettings }: Props) {
     return Boolean(progress[prior.id]?.finished);
   };
 
+  const totalEndings = list.reduce((sum, c) => sum + c.endings.length, 0);
+  const endingsFound = list.reduce((sum, c) => sum + (progress[c.id]?.endingsFound.length ?? 0), 0);
+  const chaptersFinished = list.filter((c) => progress[c.id]?.finished).length;
+
   return (
     <div className="map-hub">
       <header className="map-hub__header">
@@ -35,6 +40,22 @@ export function MapHub({ onSelect, onOpenEndings, onOpenSettings }: Props) {
           </button>
         </div>
       </header>
+
+      <div className="map-hub__progress">
+        <div className="map-hub__progress-row">
+          <span>
+            {chaptersFinished} of {list.length} chapters finished
+          </span>
+          <span>
+            {endingsFound} of {totalEndings || "?"} endings found
+          </span>
+        </div>
+        <ProgressBar
+          value={endingsFound}
+          max={totalEndings}
+          label={`${endingsFound} of ${totalEndings} endings found overall`}
+        />
+      </div>
 
       <div className="map-hub__grid">
         {list.map((chapter, index) => {

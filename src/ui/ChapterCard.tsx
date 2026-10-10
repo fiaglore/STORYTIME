@@ -1,4 +1,5 @@
 import type { Chapter } from "../content/types";
+import { ProgressBar } from "./ProgressBar";
 
 interface Props {
   chapter: Chapter;
@@ -29,6 +30,14 @@ export function ChapterCard({ chapter, unlocked, endingsFound, onPlay }: Props) 
       <p className="chapter-card__endings">
         Endings found: {endingsFound} of {chapter.endings.length || "?"}
       </p>
+      {chapter.endings.length > 0 && (
+        <ProgressBar
+          value={endingsFound}
+          max={chapter.endings.length}
+          color={chapter.color}
+          label={`${endingsFound} of ${chapter.endings.length} endings found`}
+        />
+      )}
       <button className="choice-button choice-button--play" onClick={onPlay}>
         Play
       </button>

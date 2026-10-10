@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  ageUp,
   applyDelta,
   availableJobs,
   checkDeath,
@@ -21,6 +22,7 @@ function baseCharacter(overrides: Partial<LifeCharacter> = {}): LifeCharacter {
     lifespan: 80,
     log: [],
     seenEventIds: [],
+    streak: 0,
     ...overrides,
   };
 }
@@ -94,6 +96,32 @@ describe("resolveEvent", () => {
     const next = resolveEvent(c, lethal, 0);
     expect(next.alive).toBe(false);
     expect(next.deathCause).not.toBeNull();
+  });
+
+  it("leaves the resilience streak untouched — it's a once-a-year check in ageUp, not per event", () => {
+    const event = LIFE_EVENTS.find((e) => e.id === "found-money")!; // no health delta
+    const c = baseCharacter({ streak: 3, stats: { happiness: 50, health: 40, smarts: 50, looks: 50, naira: 0 } });
+    const next = resolveEvent(c, event, 0);
+    expect(next.streak).toBe(3);
+  });
+});
+
+describe("ageUp resilience streak", () => {
+  it("extends the streak when health stays at or above the threshold after natural drift", () => {
+    // Health 80 with ageUp's drift range (-2 to +1, before the 60+ age
+    // penalty) can land as low as 78 — safely above the 30 threshold no
+    // matter which random outcome lands, so this is deterministic.
+    const c = baseCharacter({ age: 20, streak: 3, stats: { happiness: 50, health: 80, smarts: 50, looks: 50, naira: 0 } });
+    const next = ageUp(c);
+    expect(next.streak).toBe(4);
+  });
+
+  it("resets the streak when health drops below the threshold after natural drift", () => {
+    // Health 1 can rise by at most 1 from drift, landing at 2 — always
+    // below the 30 threshold regardless of the random outcome.
+    const c = baseCharacter({ age: 20, streak: 5, stats: { happiness: 50, health: 1, smarts: 50, looks: 50, naira: 0 } });
+    const next = ageUp(c);
+    expect(next.streak).toBe(0);
   });
 });
 

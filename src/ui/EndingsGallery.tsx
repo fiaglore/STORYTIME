@@ -1,5 +1,6 @@
 import chapters from "../content/chapters.json";
 import { useGameStore } from "../engine/store";
+import { ProgressBar } from "./ProgressBar";
 import type { Chapter } from "../content/types";
 
 interface Props {
@@ -24,6 +25,14 @@ export function EndingsGallery({ onBack }: Props) {
         return (
           <section key={chapter.id} className="endings-gallery__chapter">
             <h2 style={{ color: chapter.color }}>{chapter.title}</h2>
+            {chapter.endings.length > 0 && (
+              <ProgressBar
+                value={found.size}
+                max={chapter.endings.length}
+                color={chapter.color}
+                label={`${found.size} of ${chapter.endings.length} endings found`}
+              />
+            )}
             <div className="endings-gallery__grid">
               {chapter.endings.length === 0 && (
                 <p className="endings-gallery__placeholder">Coming soon.</p>

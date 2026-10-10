@@ -35,6 +35,36 @@ export interface LifeCharacter {
   lifespan: number;
   log: string[];
   seenEventIds: string[];
+  // Consecutive years (or event resolutions) health has stayed at or above
+  // the resilience threshold; resets to 0 the moment it dips below.
+  streak: number;
+}
+
+export interface LifeStage {
+  id: string;
+  name: string;
+  icon: string;
+  startAge: number;
+  endAge: number;
+}
+
+const RESILIENCE_THRESHOLD = 30;
+
+export const LIFE_STAGES: LifeStage[] = [
+  { id: "infant", name: "Infant", icon: "👶", startAge: 0, endAge: 2 },
+  { id: "child", name: "Child", icon: "🧒", startAge: 3, endAge: 12 },
+  { id: "teen", name: "Teen", icon: "🧑‍🎓", startAge: 13, endAge: 17 },
+  { id: "young-adult", name: "Young Adult", icon: "🧑", startAge: 18, endAge: 29 },
+  { id: "adult", name: "Adult", icon: "🧑‍💼", startAge: 30, endAge: 59 },
+  { id: "elder", name: "Elder", icon: "🧓", startAge: 60, endAge: 130 },
+];
+
+export function lifeStageForAge(age: number): LifeStage {
+  return LIFE_STAGES.find((s) => age >= s.startAge && age <= s.endAge) ?? LIFE_STAGES[LIFE_STAGES.length - 1];
+}
+
+function nextStreak(prevStreak: number, health: number): number {
+  return health >= RESILIENCE_THRESHOLD ? prevStreak + 1 : 0;
 }
 
 const STAT_MIN = 0;
@@ -65,6 +95,7 @@ export function createCharacter(name: string): LifeCharacter {
     lifespan: randomInt(58, 92),
     log: [`${name.trim() || "Ngozi"} is born in Lagos.`],
     seenEventIds: [],
+    streak: 0,
   };
 }
 
@@ -112,7 +143,12 @@ export function ageUp(character: LifeCharacter): LifeCharacter {
     naira: jobIncome(character.job),
   });
 
-  const next: LifeCharacter = { ...character, age: nextAge, stats };
+  const next: LifeCharacter = {
+    ...character,
+    age: nextAge,
+    stats,
+    streak: nextStreak(character.streak, stats.health),
+  };
   const cause = checkDeath(next);
   if (cause) {
     next.alive = false;
@@ -130,6 +166,9 @@ export function resolveEvent(
   const choice = event.choices[choiceIndex];
   if (!choice) return character;
   const stats = applyDelta(character.stats, choice.delta);
+  // Streak is a once-a-year resilience check (see ageUp) — an event's
+  // immediate stat hit doesn't tick it on its own, or players who hit an
+  // event most years would rack up roughly double the "years" they lived.
   const next: LifeCharacter = {
     ...character,
     stats,

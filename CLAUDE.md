@@ -67,6 +67,23 @@ separate systems — don't assume one when working on the other.
   "infant" band intentionally has no events — babies don't make choices).
   Keep the engine functions in `lifeSim.ts` pure (character in, character
   out) so they stay testable without a browser; see `tests/lifesim.test.ts`.
+- `LifeCharacter.streak` is a once-a-year resilience counter (consecutive
+  years health has stayed >= 30), ticked only in `ageUp` — not in
+  `resolveEvent`. It used to tick in both, which let it roughly double-count
+  within a single year (an "18-year streak" at age 18 turning into a
+  nonsensical "29-year streak"); this was a real bug, see the comment above
+  `resolveEvent`'s `next` object. Don't reintroduce a second tick point.
+- Shared gamification UI lives in `src/ui/`: `useStatDeltas.ts` diffs a
+  `{key: value}` map across renders into short-lived floating +N/-N popup
+  events (used by `MeterBar.tsx` for naira/spirit/chapter-meter and by
+  `LifeSim.tsx` for its stats) — reuse it rather than re-implementing a
+  diff/timeout dance per screen. `ProgressBar.tsx` is a small reusable "N of
+  M" bar (chapter/endings counts) that reuses the `meter__track`/`meter__fill`
+  classes so every progress fill in the app animates identically.
+- `JobInterviewGame.tsx` is a timing mini-game (stop a sweeping marker in a
+  target zone) shown before a Lagos Life job is confirmed; the job is
+  granted regardless of the result, which only changes a one-time naira/
+  happiness bonus — see `INTERVIEW_BONUS` in `LifeSim.tsx`.
 - Run `npm test` and `npm run build` before finishing any task.
 
 ## Firebase / cloud save

@@ -1,11 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import {
   ageUp,
+  applyDelta,
   availableJobs,
   createCharacter,
+  lifeStageForAge,
   pickEvent,
   resolveEvent,
   takeJob,
+  JOBS,
   type LifeCharacter,
   type JobId,
 } from "../engine/lifeSim";
@@ -13,6 +16,14 @@ import type { LifeEvent } from "../content/lifeEvents";
 import { fetchCloudSave, writeCloudSave } from "../engine/firebase";
 import { useAuthStore } from "../engine/authStore";
 import { AccountSection } from "./AccountSection";
+import { latestDelta, useStatDeltas } from "./useStatDeltas";
+import { JobInterviewGame, type InterviewResult } from "./JobInterviewGame";
+
+const INTERVIEW_BONUS: Record<InterviewResult, { naira?: number; happiness?: number }> = {
+  great: { naira: 4, happiness: 3 },
+  good: { naira: 1, happiness: 1 },
+  miss: { happiness: -2 },
+};
 
 interface Props {
   onExit: () => void;
@@ -53,8 +64,10 @@ export function LifeSim({ onExit }: Props) {
   const [nameInput, setNameInput] = useState("");
   const [activeEvent, setActiveEvent] = useState<LifeEvent | null>(null);
   const [showJobs, setShowJobs] = useState(false);
+  const [pendingJob, setPendingJob] = useState<JobId | null>(null);
   const uid = useAuthStore((s) => s.user?.uid);
   const pulledForUid = useRef<string | null>(null);
+  const statEvents = useStatDeltas(character ? { ...character.stats } : {});
 
   useEffect(() => {
     persist(character, uid);
@@ -78,7 +91,7 @@ export function LifeSim({ onExit }: Props) {
   };
 
   const handleAgeUp = () => {
-    if (!character || !character.alive || activeEvent) return;
+    if (!character || !character.alive || activeEvent || pendingJob) return;
     const aged = ageUp(character);
     setCharacter(aged);
     if (aged.alive && Math.random() < EVENT_CHANCE) {
@@ -95,8 +108,15 @@ export function LifeSim({ onExit }: Props) {
 
   const handleJobPick = (job: JobId) => {
     if (!character) return;
-    setCharacter(takeJob(character, job));
     setShowJobs(false);
+    setPendingJob(job);
+  };
+
+  const handleInterviewComplete = (result: InterviewResult) => {
+    if (!character || !pendingJob) return;
+    const hired = takeJob(character, pendingJob);
+    setCharacter({ ...hired, stats: applyDelta(hired.stats, INTERVIEW_BONUS[result]) });
+    setPendingJob(null);
   };
 
   const startNewLife = () => {
@@ -182,22 +202,74 @@ export function LifeSim({ onExit }: Props) {
         </h1>
       </header>
 
-      <div className="lifesim-stats">
-        {STAT_LABELS.map(({ key, label }) => (
-          <div className="lifesim-stat" key={key}>
-            <div className="lifesim-stat__row">
-              <span>{label}</span>
-              <span>{character.stats[key]}</span>
+      {(() => {
+        const stage = lifeStageForAge(character.age);
+        const span = stage.endAge - stage.startAge || 1;
+        const progress = Math.min(100, Math.max(0, ((character.age - stage.startAge) / span) * 100));
+        return (
+          <div className="lifesim-stage">
+            <div className="lifesim-stage__row">
+              <span className="lifesim-stage__badge">
+                {stage.icon} {stage.name}
+              </span>
+              {character.streak > 1 && (
+                <span className="lifesim-streak">🔥 {character.streak}-year streak</span>
+              )}
             </div>
             <div className="meter__track">
               <div
                 className="meter__fill"
-                style={{ width: `${character.stats[key]}%`, background: "var(--accent)" }}
+                style={{ width: `${progress}%`, background: "var(--chapter-accent, var(--accent))" }}
               />
             </div>
           </div>
-        ))}
-        <div className="lifesim-naira">₦{character.stats.naira.toLocaleString()}k naira</div>
+        );
+      })()}
+
+      <div className="lifesim-stats">
+        {STAT_LABELS.map(({ key, label }) => {
+          const delta = latestDelta(statEvents, key);
+          return (
+            <div className="lifesim-stat" key={key}>
+              <div className="lifesim-stat__row">
+                <span>{label}</span>
+                <span className="meter__value">
+                  {character.stats[key]}
+                  {delta != null && (
+                    <span
+                      key={`${delta}-${character.stats[key]}`}
+                      className={`meter__popup ${delta > 0 ? "meter__popup--up" : "meter__popup--down"}`}
+                    >
+                      {delta > 0 ? `+${delta}` : delta}
+                    </span>
+                  )}
+                </span>
+              </div>
+              <div className={`meter__track ${delta != null ? "meter__track--flash" : ""}`}>
+                <div
+                  className="meter__fill"
+                  style={{ width: `${character.stats[key]}%`, background: "var(--accent)" }}
+                />
+              </div>
+            </div>
+          );
+        })}
+        <div className="lifesim-naira">
+          <span className="lifesim-naira__value">
+            ₦{character.stats.naira.toLocaleString()}k naira
+            {latestDelta(statEvents, "naira") != null && (
+              <span
+                key={`naira-${latestDelta(statEvents, "naira")}-${character.stats.naira}`}
+                className={`meter__popup ${
+                  latestDelta(statEvents, "naira")! > 0 ? "meter__popup--up" : "meter__popup--down"
+                }`}
+              >
+                {latestDelta(statEvents, "naira")! > 0 ? "+" : ""}
+                {latestDelta(statEvents, "naira")}k
+              </span>
+            )}
+          </span>
+        </div>
       </div>
 
       <p className="lifesim-job">
@@ -209,7 +281,7 @@ export function LifeSim({ onExit }: Props) {
         )}
       </p>
 
-      {showJobs && (
+      {showJobs && !pendingJob && (
         <div className="lifesim-jobs">
           {availableJobs(character).map((j) => (
             <button
@@ -221,6 +293,13 @@ export function LifeSim({ onExit }: Props) {
             </button>
           ))}
         </div>
+      )}
+
+      {pendingJob && (
+        <JobInterviewGame
+          jobTitle={JOBS.find((j) => j.id === pendingJob)?.title ?? "the job"}
+          onComplete={handleInterviewComplete}
+        />
       )}
 
       <div className="lifesim-log">
@@ -247,9 +326,11 @@ export function LifeSim({ onExit }: Props) {
           </div>
         </div>
       ) : (
-        <button className="choice-button choice-button--primary lifesim-age-up" onClick={handleAgeUp}>
-          Age up →
-        </button>
+        !pendingJob && (
+          <button className="choice-button choice-button--primary lifesim-age-up" onClick={handleAgeUp}>
+            Age up →
+          </button>
+        )
       )}
     </div>
   );

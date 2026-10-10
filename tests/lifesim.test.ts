@@ -25,6 +25,8 @@ import {
   reviveCharacter,
   rollWealthTier,
   sendMoney,
+  summarizeLife,
+  formatObituaryText,
   takeJob,
   talkToClassroomNPC,
   treatInjury,
@@ -1040,6 +1042,55 @@ describe("changeFaith", () => {
   it("is a no-op (same reference) when the faith doesn't change", () => {
     const c = baseCharacter({ faith: "atheist" });
     expect(changeFaith(c, "atheist")).toBe(c);
+  });
+});
+
+describe("summarizeLife / formatObituaryText", () => {
+  it("reports age, cause, wealth tier label, final naira and job title", () => {
+    const c = baseCharacter({
+      age: 74,
+      deathCause: "Old age, peacefully, surrounded by family.",
+      wealthTier: "middle-class",
+      stats: { happiness: 50, health: 0, smarts: 50, looks: 50, naira: 250_000 },
+      job: "trader",
+    });
+    const summary = summarizeLife(c);
+    expect(summary.ageAtDeath).toBe(74);
+    expect(summary.deathCause).toBe("Old age, peacefully, surrounded by family.");
+    expect(summary.wealthTierLabel).not.toBe("middle-class"); // resolved to the display label
+    expect(summary.finalNaira).toBe(250_000);
+    expect(summary.jobTitle).toBe("Market Trader");
+  });
+
+  it("shows 'Retired' as the job title for a retired character regardless of their last job id", () => {
+    const c = baseCharacter({ job: "none", retired: true });
+    expect(summarizeLife(c).jobTitle).toBe("Retired");
+  });
+
+  it("is null when the character never held a job", () => {
+    const c = baseCharacter({ job: "none", retired: false });
+    expect(summarizeLife(c).jobTitle).toBeNull();
+  });
+
+  it("includes a marriage highlight only when spouseName is set", () => {
+    const married = baseCharacter({ spouseUid: "x", spouseName: "Tunde" });
+    expect(summarizeLife(married).highlights).toContain("Married to Tunde");
+    expect(summarizeLife(baseCharacter()).highlights.some((h) => h.includes("Married"))).toBe(false);
+  });
+
+  it("includes a chore-mastery highlight naming the highest-leveled category", () => {
+    const master = baseCharacter({ choreSkills: { labor: 20, errands: 85, finance: 10 } });
+    expect(summarizeLife(master).highlights.some((h) => h.includes("errands"))).toBe(true);
+    expect(summarizeLife(baseCharacter()).highlights.some((h) => h.includes("Mastered"))).toBe(false);
+  });
+
+  it("formatObituaryText includes the name, highlights and the full log, not just the last few lines", () => {
+    const longLog = Array.from({ length: 20 }, (_, i) => `Age ${i}: Something happened.`);
+    const c = baseCharacter({ spouseUid: "x", spouseName: "Ada", log: longLog });
+    const text = formatObituaryText(c);
+    expect(text).toContain(c.name);
+    expect(text).toContain("Married to Ada");
+    for (const line of longLog) expect(text).toContain(line);
   });
 });
 

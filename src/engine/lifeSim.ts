@@ -1028,6 +1028,78 @@ export function changeFaith(character: LifeCharacter, faith: FaithId): LifeChara
   return { ...character, faith };
 }
 
+// The endgame — a life summary, not just "lived to N, died of X". Every
+// field here is derived purely from the final character state (no new
+// persisted history), so it's safe to call on a save from before this
+// existed. Highlights are a handful of plain-English badges, not a
+// persistent achievement system — nothing here is stored, it's
+// recomputed fresh each time the obituary screen renders.
+export interface LifeSummary {
+  name: string;
+  ageAtDeath: number;
+  deathCause: string | null;
+  wealthTierLabel: string;
+  finalNaira: number;
+  finalStats: LifeStats;
+  jobTitle: string | null;
+  highlights: string[];
+}
+
+export function summarizeLife(character: LifeCharacter): LifeSummary {
+  const jobDef = JOBS.find((j) => j.id === character.job);
+  const jobTitle = character.retired ? "Retired" : (jobDef?.title ?? null);
+  const wealthTierLabel = WEALTH_TIERS.find((t) => t.id === character.wealthTier)?.label ?? character.wealthTier;
+
+  const highlights: string[] = [];
+  if (character.spouseName) highlights.push(`Married to ${character.spouseName}`);
+  if (character.retired) highlights.push("Retired with a pension");
+  if (character.assets.length > 0) {
+    highlights.push(
+      character.assets.length === 1
+        ? "Built a business of their own"
+        : `Built ${character.assets.length} businesses and income streams`,
+    );
+  }
+  if (character.stats.smarts >= 80) highlights.push("Sharp mind — smarts stayed 80+");
+  if (character.stats.looks >= 80) highlights.push("Turned heads their whole life — looks stayed 80+");
+  if (character.streak >= 10) highlights.push(`${character.streak}-year streak of staying healthy`);
+  const maxChoreLevel = Math.max(character.choreSkills.labor, character.choreSkills.errands, character.choreSkills.finance);
+  if (maxChoreLevel >= 80) {
+    const category = Object.entries(character.choreSkills).find(([, level]) => level === maxChoreLevel)?.[0];
+    if (category) highlights.push(`Mastered ${category}`);
+  }
+  if (character.inventory.length >= 10) highlights.push(`Collected ${character.inventory.length} belongings over a lifetime`);
+  if (character.stats.naira >= 10_000_000) highlights.push(`Died with ₦${character.stats.naira.toLocaleString()} to their name`);
+
+  return {
+    name: character.name,
+    ageAtDeath: character.age,
+    deathCause: character.deathCause,
+    wealthTierLabel,
+    finalNaira: character.stats.naira,
+    finalStats: character.stats,
+    jobTitle,
+    highlights,
+  };
+}
+
+// A plain-text obituary, suitable for copying/sharing — the summary
+// highlights up top, then the character's entire life log (not just the
+// last few lines the obituary screen shows by default).
+export function formatObituaryText(character: LifeCharacter): string {
+  const summary = summarizeLife(character);
+  const parts: string[] = [`${summary.name} — ${summary.ageAtDeath} years in Lagos`];
+  if (summary.deathCause) parts.push(summary.deathCause);
+  if (summary.highlights.length > 0) {
+    parts.push("");
+    parts.push(...summary.highlights.map((h) => `• ${h}`));
+  }
+  parts.push("");
+  parts.push("Full life story:");
+  parts.push(...character.log);
+  return parts.join("\n");
+}
+
 // Current shape of a persisted save (localStorage and Firestore's
 // users/{uid}.lifeSim both store this). Bump this whenever LifeCharacter
 // gains a field that migrateCharacter needs a default for — the version

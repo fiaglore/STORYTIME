@@ -348,6 +348,24 @@ the single surviving mode, `src/ui/LifeSim.tsx`.
     18, 21, 30, 40, 50, 60, 70, 80); `zodiacFor` derives a sign from
     `birthDate` and both the 1st/21st-birthday log lines and the main
     screen's title (`{name} · Age {age} · {sign}`) show it.
+- The obituary screen (`!character.alive` in `LifeSim.tsx`) is a real
+  endgame, not just "lived to N, died of X" with the last 6 log lines.
+  `summarizeLife`/`formatObituaryText` in `lifeSim.ts` are pure functions
+  derived entirely from the final `LifeCharacter` — no new persisted
+  fields, so they're safe to call on any existing save. `summarizeLife`
+  resolves the wealth tier id to its display label and the job id to its
+  title (or `"Retired"` once `retired`), and computes a handful of
+  plain-English highlight badges (married, retired, assets built, 80+
+  smarts/looks, a 10+ year health streak, 80+ chore mastery in whichever
+  category is highest, 10+ items collected, 10M+ naira at death) —
+  nothing here is stored as an achievement, it's recomputed fresh every
+  render. The obituary shows the last 6 log lines by default with a
+  "View full life story" toggle to the character's entire `log` (which
+  was already kept in full internally, just never surfaced past 6
+  lines), plus a "Copy life story to share" button
+  (`navigator.clipboard.writeText(formatObituaryText(character))`) that
+  flips to "Copied!" for 2 seconds — `formatObituaryText` is the same
+  summary plus the full log, as plain text.
 - Run `npm test` and `npm run build` before finishing any task.
 
 - `src/ui/Settings.tsx` is one of the tabs in `LifeSim.tsx` (alongside

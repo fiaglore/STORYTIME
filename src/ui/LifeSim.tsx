@@ -23,6 +23,8 @@ import {
   retire,
   reviveCharacter,
   rollWealthTier,
+  summarizeLife,
+  formatObituaryText,
   takeJob,
   talkToClassroomNPC,
   treatInjury,
@@ -345,6 +347,19 @@ export function LifeSim({ onExit }: Props) {
   };
 
   const [prayerMessage, setPrayerMessage] = useState<string | null>(null);
+  const [showFullLog, setShowFullLog] = useState(false);
+  const [obituaryCopied, setObituaryCopied] = useState(false);
+  const handleCopyObituary = async () => {
+    if (!character) return;
+    try {
+      await navigator.clipboard.writeText(formatObituaryText(character));
+      setObituaryCopied(true);
+      setTimeout(() => setObituaryCopied(false), 2000);
+    } catch {
+      // Clipboard access can be denied (permissions, insecure context) —
+      // nothing to recover into, the button just silently doesn't confirm.
+    }
+  };
   const handlePray = () => {
     if (!character) return;
     const result = pray(character);
@@ -445,6 +460,8 @@ export function LifeSim({ onExit }: Props) {
     setShowSettings(false);
     setShowClassroom(false);
     setClassroomMessage(null);
+    setShowFullLog(false);
+    setObituaryCopied(false);
   };
 
   if (!character) {
@@ -578,6 +595,8 @@ export function LifeSim({ onExit }: Props) {
   }
 
   if (!character.alive) {
+    const summary = summarizeLife(character);
+    const visibleLog = showFullLog ? character.log : character.log.slice(-6);
     return (
       <div className="story-screen">
         <header className="story-screen__header">
@@ -587,16 +606,42 @@ export function LifeSim({ onExit }: Props) {
           <h1 className="story-screen__title">Lagos Life</h1>
         </header>
         <div className="lifesim-obituary">
-          <h2>{character.name}</h2>
-          <p className="lifesim-obituary__span">Lived to {character.age}</p>
-          <p className="lifesim-obituary__cause">{character.deathCause}</p>
+          <h2>{summary.name}</h2>
+          <p className="lifesim-obituary__span">Lived to {summary.ageAtDeath}</p>
+          <p className="lifesim-obituary__cause">{summary.deathCause}</p>
+
+          <div className="lifesim-obituary__summary">
+            <span>{summary.wealthTierLabel}</span>
+            <span>{summary.jobTitle ?? "Never held a job"}</span>
+            <span>₦{summary.finalNaira.toLocaleString()} at death</span>
+          </div>
+
+          {summary.highlights.length > 0 && (
+            <ul className="lifesim-obituary__highlights">
+              {summary.highlights.map((h, i) => (
+                <li key={i} className="lifesim-obituary__highlight">
+                  {h}
+                </li>
+              ))}
+            </ul>
+          )}
+
           <div className="lifesim-log">
-            {character.log.slice(-6).map((line, i) => (
+            {visibleLog.map((line, i) => (
               <p key={i} className="lifesim-log__line">
                 {line}
               </p>
             ))}
           </div>
+          {character.log.length > 6 && (
+            <button className="lifesim-obituary__toggle-log" onClick={() => setShowFullLog((s) => !s)}>
+              {showFullLog ? "Show less" : "View full life story"}
+            </button>
+          )}
+
+          <button className="choice-button" onClick={handleCopyObituary}>
+            {obituaryCopied ? "Copied!" : "Copy life story to share"}
+          </button>
           {character.stats.naira >= REVIVE_COST && (
             <button className="choice-button" onClick={handleRevive}>
               Pay ₦{REVIVE_COST.toLocaleString()} to revive

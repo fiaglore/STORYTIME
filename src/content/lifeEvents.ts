@@ -814,4 +814,141 @@ export const LIFE_EVENTS: LifeEvent[] = [
       },
     ],
   },
+  {
+    id: "extra-lessons",
+    bands: ["child"],
+    prompt: "Your teacher says you could do better with extra lessons after school — ₦2,000 a week.",
+    choices: [
+      {
+        label: "Ask Mama to pay for the lessons",
+        result: "She sighs, counts the notes twice, and agrees. Your handwriting improves first.",
+        delta: { naira: -2000, smarts: 3 },
+        requiresNaira: 2000,
+      },
+      {
+        label: "Study with the older girl next door instead",
+        result: "Free, and she's strict. You learn, just slower.",
+        delta: { smarts: 1, happiness: -1 },
+      },
+    ],
+  },
+  {
+    id: "harmattan-dust",
+    bands: ["child"],
+    prompt: "Harmattan dust has turned the whole street the colour of flour, and your lips are cracking.",
+    choices: [
+      {
+        label: "Wear the scarf and rub on the Vaseline",
+        result: "Mama fusses, but your lips and your chest survive the season.",
+        delta: { health: 1 },
+      },
+      {
+        label: "Play outside like nothing is wrong",
+        result: "Great games, terrible cough by Sunday.",
+        delta: { happiness: 2, health: -3 },
+      },
+    ],
+  },
+  {
+    id: "cultural-day",
+    bands: ["child"],
+    prompt: "Your school is picking dancers for cultural day.",
+    choices: [
+      {
+        label: "Put your hand up",
+        result: "You mix up one step and nobody remembers but you. The stage was yours.",
+        delta: { happiness: 3, looks: 1 },
+      },
+      {
+        label: "Hide at the back of the class",
+        result: "You watch from the crowd, a little jealous.",
+        delta: { happiness: -1 },
+      },
+    ],
+  },
+  {
+    id: "puff-puff-seller",
+    bands: ["child"],
+    prompt: "A woman sells hot puff-puff outside the school gate, and you have ₦200 in your pocket.",
+    choices: [
+      {
+        label: "Buy some",
+        result: "Hot, sugary, gone in a minute. Worth it.",
+        delta: { naira: -200, happiness: 2 },
+      },
+      {
+        label: "Save the money",
+        result: "You keep it. The smell follows you all the way home.",
+        delta: { happiness: -1 },
+      },
+    ],
+  },
+  {
+    id: "broken-toy",
+    bands: ["child"],
+    prompt: "Your younger cousin, visiting for the holidays, breaks your best toy.",
+    choices: [
+      {
+        label: "Tell Mama",
+        result: "She scolds him, then scolds you for tattling. Fair, apparently.",
+        delta: { happiness: -1 },
+      },
+      {
+        label: "Forgive him and share your other toys",
+        result: "He follows you around for the rest of the holiday.",
+        delta: { happiness: 2 },
+      },
+    ],
+  },
+  {
+    id: "street-football",
+    bands: ["child"],
+    prompt: "The boys on your street are one player short for a football match.",
+    choices: [
+      {
+        label: "Join the game",
+        result: "You scrape your knee and score once. You'll tell this story for years.",
+        delta: { happiness: 3, health: -1 },
+      },
+      {
+        label: "Watch from the gate",
+        result: "Safer behind the gate, and a little boring.",
+        delta: { happiness: -1 },
+      },
+    ],
+  },
+  {
+    id: "village-visit",
+    bands: ["child"],
+    prompt: "School is on break, and Mama says the whole family is travelling to the village to see Grandma.",
+    choices: [
+      {
+        label: "Go with the family",
+        result: "A long, hot bus ride, then more food than you can finish.",
+        delta: { naira: -1500, happiness: 3, health: -1 },
+      },
+      {
+        label: "Stay with the neighbour",
+        result: "Quiet days, and everyone comes back with stories you missed.",
+        delta: { happiness: -2 },
+      },
+    ],
+  },
+  {
+    id: "lost-in-market",
+    bands: ["child"],
+    prompt: "In the crowded market you let go of Mama's wrapper — and suddenly she's gone.",
+    choices: [
+      {
+        label: "Stay where you are and wait",
+        result: "Mama finds you in five frightening minutes. You hold her hand the whole way home.",
+        delta: { happiness: -1 },
+      },
+      {
+        label: "Ask a trader at a stall to call for her",
+        result: "He announces your name over his loudspeaker, and half the market cheers when she appears.",
+        delta: { happiness: 1, smarts: 1 },
+      },
+    ],
+  },
 ];

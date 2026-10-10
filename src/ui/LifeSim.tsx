@@ -12,8 +12,8 @@ import {
   isChoiceAvailable,
   lifeStageForAge,
   meetsAgeUpRequirements,
-  pickEvent,
   pray,
+  rollYearWork,
   pickChoreGameVariant,
   recordChoreGamePlayed,
   resolveChore,
@@ -36,7 +36,7 @@ import {
   type FaithId,
 } from "../engine/lifeSim";
 import type { LifeEvent } from "../content/lifeEvents";
-import { pickChores, type Chore, type ChoreGameVariant } from "../content/chores";
+import type { Chore, ChoreGameVariant } from "../content/chores";
 import { SHOP_CATEGORIES, SHOP_ITEMS, type ShopCategory, type ShopItem } from "../content/shop";
 import { SKILLS, SKILL_TRAIN_COST, type Skill } from "../content/skills";
 import { schoolsAvailableTo, type School } from "../content/schools";
@@ -64,19 +64,10 @@ const INTERVIEW_BONUS: Record<InterviewResult, { naira?: number; happiness?: num
   miss: { happiness: -2 },
 };
 
-// How many small no-choice chores (content/chores.ts) have to be cleared
-// each year before Age Up is available — the deliberate, semi-tedious
-// daily-grind friction the design asks for. Age bands with no chores in
-// the pool (infancy) just get an empty list and Age Up stays immediate.
-// Only applies past AGE_SCHOOL_CHOICE_CUTOFF — younger ages get the
-// school-choice screen instead (see handleAgeUp).
-const CHORES_PER_YEAR = 4;
-
-// How many life events (content/lifeEvents.ts) fire per year, past the
-// school-choice age window — each resolved one at a time via pendingEvents,
-// same queue shape as pendingChores. pickEvent's own repeat-once-exhausted
-// fallback means a short age-band pool can still fill this every year.
-const EVENTS_PER_YEAR = 5;
+// How many chores and events a year rolls (and from which age) is decided by
+// rollYearWork in engine/lifeSim.ts — see CHORES_PER_YEAR_BY_BAND and
+// EVENTS_PER_YEAR_BY_BAND there. Infants (0-2) roll none, so Age Up stays
+// immediate for them; the child band (3+) is where the daily grind starts.
 
 // With 600 shop items, rendering every match is wasteful and the list
 // becomes unscannable — cap what's shown at once and tell the player to
@@ -147,7 +138,7 @@ export function LifeSim({ onExit }: Props) {
   // which is fine for low-stakes busywork like this.
   const [pendingChores, setPendingChores] = useState<Chore[]>(() => {
     const saved = loadSaved();
-    return saved && saved.alive && saved.age > AGE_SCHOOL_CHOICE_CUTOFF ? pickChores(saved, CHORES_PER_YEAR) : [];
+    return saved && saved.alive ? rollYearWork(saved).chores : [];
   });
   const [choreAttempt, setChoreAttempt] = useState(0);
   const uid = useAuthStore((s) => s.user?.uid);
@@ -282,17 +273,13 @@ export function LifeSim({ onExit }: Props) {
       return;
     const aged = ageUp(character);
     setCharacter(aged);
-    // Ages through AGE_SCHOOL_CHOICE_CUTOFF get the school-choice screen
-    // instead of the normal chores/events grind — see the render logic
-    // below for where that screen is shown.
-    if (aged.alive && aged.age > AGE_SCHOOL_CHOICE_CUTOFF) {
-      setPendingChores(pickChores(aged, CHORES_PER_YEAR));
-      const events: LifeEvent[] = [];
-      for (let i = 0; i < EVENTS_PER_YEAR; i++) {
-        const event = pickEvent(aged);
-        if (event) events.push(event);
-      }
-      setPendingEvents(events);
+    // Chores and events start at age 3 (the child band); infants roll empty
+    // lists so ages 0-2 stay an instant Age Up. The school choice is a
+    // separate one-time step shown first — it doesn't replace this.
+    if (aged.alive) {
+      const work = rollYearWork(aged);
+      setPendingChores(work.chores);
+      setPendingEvents(work.events);
     }
   };
 

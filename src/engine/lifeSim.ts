@@ -10,6 +10,7 @@ import {
 import {
   GAME_REPEAT_COOLDOWN_YEARS,
   VARIANTS_BY_CATEGORY,
+  pickChores,
   type Chore,
   type ChoreCategory,
   type ChoreGameVariant,
@@ -326,6 +327,56 @@ export function pickEvent(character: LifeCharacter): LifeEvent | null {
   const unseen = pool.filter((e) => !character.seenEventIds.includes(e.id));
   const choices = unseen.length > 0 ? unseen : pool;
   return choices[randomInt(0, choices.length - 1)];
+}
+
+// How many chores and life events a year rolls, per age band. Infants (0-2)
+// roll nothing, so those years stay a plain Age Up; gameplay starts at age 3
+// (the child band). Kids get a lighter load than teens/adults: their pools
+// are small, and ten years of five events a year would be mostly repeats.
+export const CHORES_PER_YEAR_BY_BAND: Record<AgeBand, number> = {
+  infant: 0,
+  child: 2,
+  teen: 4,
+  adult: 4,
+};
+
+export const EVENTS_PER_YEAR_BY_BAND: Record<AgeBand, number> = {
+  infant: 0,
+  child: 2,
+  teen: 5,
+  adult: 5,
+};
+
+function shuffled<T>(items: T[]): T[] {
+  const copy = [...items];
+  for (let i = copy.length - 1; i > 0; i--) {
+    const j = randomInt(0, i);
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy;
+}
+
+// Picks up to `count` DISTINCT events for the character's current band,
+// unseen ones first. Distinct matters because seenEventIds only updates when
+// an event is resolved, so calling pickEvent() in a loop at the start of the
+// year could draw the same event twice before any were played.
+export function pickEvents(character: LifeCharacter, count: number): LifeEvent[] {
+  const band = bandForAge(character.age);
+  const pool = LIFE_EVENTS.filter((e) => e.bands.includes(band));
+  const unseen = pool.filter((e) => !character.seenEventIds.includes(e.id));
+  const seen = pool.filter((e) => character.seenEventIds.includes(e.id));
+  return [...shuffled(unseen), ...shuffled(seen)].slice(0, Math.max(0, count));
+}
+
+// Everything a new year asks of the player before Age Up unlocks. One entry
+// point so character load, Age Up and tests all agree on when gameplay starts.
+export function rollYearWork(character: LifeCharacter): { chores: Chore[]; events: LifeEvent[] } {
+  if (!character.alive) return { chores: [], events: [] };
+  const band = bandForAge(character.age);
+  return {
+    chores: pickChores(character, CHORES_PER_YEAR_BY_BAND[band]),
+    events: pickEvents(character, EVENTS_PER_YEAR_BY_BAND[band]),
+  };
 }
 
 function jobIncome(job: JobId): number {

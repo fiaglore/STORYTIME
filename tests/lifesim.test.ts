@@ -3,16 +3,25 @@ import {
   ageUp,
   applyDelta,
   availableJobs,
+  buyItem,
   checkDeath,
   createCharacter,
+  hustle,
   isChoiceAvailable,
+  marry,
+  meetsAgeUpRequirements,
   resolveChore,
   resolveEvent,
   takeJob,
+  trainSkill,
+  AGE_UP_REQUIREMENTS,
+  MAX_HUSTLES_PER_YEAR,
   type LifeCharacter,
 } from "../src/engine/lifeSim";
 import { LIFE_EVENTS, bandForAge } from "../src/content/lifeEvents";
 import { CHORES, pickChores } from "../src/content/chores";
+import { SHOP_ITEMS } from "../src/content/shop";
+import { SKILLS, SKILL_TRAIN_COST } from "../src/content/skills";
 
 function baseCharacter(overrides: Partial<LifeCharacter> = {}): LifeCharacter {
   return {
@@ -27,6 +36,11 @@ function baseCharacter(overrides: Partial<LifeCharacter> = {}): LifeCharacter {
     seenEventIds: [],
     streak: 0,
     assets: [],
+    inventory: [],
+    skills: {},
+    earnedThisYear: 0,
+    spentThisYear: 0,
+    hustlesThisYear: 0,
     ...overrides,
   };
 }
@@ -280,10 +294,22 @@ describe("jobs", () => {
     expect(next.job).toBe("none");
   });
 
-  it("assigns a job once old enough", () => {
-    const adult = baseCharacter({ age: 20 });
+  it("assigns a job once old enough and skilled enough", () => {
+    const adult = baseCharacter({ age: 20, skills: { trading: 20 } });
     const next = takeJob(adult, "trader");
     expect(next.job).toBe("trader");
+  });
+
+  it("refuses a job the character doesn't have the required skill level for, even bypassing availableJobs", () => {
+    const unskilled = baseCharacter({ age: 20 });
+    const next = takeJob(unskilled, "trader"); // requires trading: 20, has 0
+    expect(next.job).toBe("none");
+    expect(next).toBe(unskilled);
+  });
+
+  it("hawker (no skill requirement) is always available to an adult", () => {
+    const adult = baseCharacter({ age: 20 });
+    expect(availableJobs(adult).some((j) => j.id === "hawker")).toBe(true);
   });
 });
 
@@ -299,5 +325,149 @@ describe("createCharacter", () => {
   it("falls back to a default name when blank", () => {
     const c = createCharacter("   ");
     expect(c.name.length).toBeGreaterThan(0);
+  });
+
+  it("starts with every skill present at a low random level, inventory and assets empty", () => {
+    const c = createCharacter("Ada");
+    for (const skill of SKILLS) {
+      expect(c.skills[skill.id]).toBeGreaterThanOrEqual(0);
+      expect(c.skills[skill.id]).toBeLessThanOrEqual(10);
+    }
+    expect(c.inventory).toEqual([]);
+    expect(c.assets).toEqual([]);
+    expect(c.earnedThisYear).toBe(0);
+    expect(c.spentThisYear).toBe(0);
+  });
+});
+
+describe("shop", () => {
+  it("buys an item, deducts the price, applies its stat boost, and tracks the spend", () => {
+    const item = SHOP_ITEMS.find((i) => i.id === "suya-night")!; // price 2000, happiness +3
+    const c = baseCharacter({ stats: { happiness: 50, health: 50, smarts: 50, looks: 50, naira: 5000 } });
+    const next = buyItem(c, item);
+    expect(next.stats.naira).toBe(3000);
+    expect(next.stats.happiness).toBe(53);
+    expect(next.inventory).toContain(item.id);
+    expect(next.spentThisYear).toBe(2000);
+  });
+
+  it("refuses to buy an item the character can't afford", () => {
+    const item = SHOP_ITEMS.find((i) => i.id === "laptop")!; // price 250,000
+    const c = baseCharacter({ stats: { happiness: 50, health: 50, smarts: 50, looks: 50, naira: 1000 } });
+    const next = buyItem(c, item);
+    expect(next).toBe(c);
+  });
+
+  it("refuses to buy the same item twice", () => {
+    const item = SHOP_ITEMS.find((i) => i.id === "second-hand-fan")!;
+    const c = baseCharacter({ inventory: [item.id], stats: { happiness: 50, health: 50, smarts: 50, looks: 50, naira: 1_000_000 } });
+    const next = buyItem(c, item);
+    expect(next).toBe(c);
+  });
+
+  it("includes a cheap enough item that any adult earning the minimum can always hit the spend requirement", () => {
+    const cheapest = Math.min(...SHOP_ITEMS.map((i) => i.price));
+    expect(cheapest).toBeLessThanOrEqual(500);
+  });
+});
+
+describe("skills", () => {
+  it("trainSkill raises the chosen skill, costs naira and a little health, and tracks the spend", () => {
+    const skill = SKILLS.find((s) => s.id === "tech")!;
+    const c = baseCharacter({ skills: { tech: 10 }, stats: { happiness: 50, health: 50, smarts: 50, looks: 50, naira: 10000 } });
+    const next = trainSkill(c, skill, SKILL_TRAIN_COST);
+    expect(next.skills.tech).toBeGreaterThan(10);
+    expect(next.skills.tech).toBeLessThanOrEqual(25);
+    expect(next.stats.naira).toBe(10000 - SKILL_TRAIN_COST);
+    expect(next.stats.health).toBe(49);
+    expect(next.spentThisYear).toBe(SKILL_TRAIN_COST);
+  });
+
+  it("refuses to train without enough naira", () => {
+    const skill = SKILLS.find((s) => s.id === "tech")!;
+    const c = baseCharacter({ stats: { happiness: 50, health: 50, smarts: 50, looks: 50, naira: 100 } });
+    const next = trainSkill(c, skill, SKILL_TRAIN_COST);
+    expect(next).toBe(c);
+  });
+
+  it("gates a job behind its required skill level, and taking the job once skilled works", () => {
+    const techJob = { skill: "tech", level: 40 };
+    const unskilled = baseCharacter({ age: 20, skills: { tech: 10 } });
+    expect(availableJobs(unskilled).some((j) => j.id === "tech")).toBe(false);
+    const skilled = baseCharacter({ age: 20, skills: { [techJob.skill]: techJob.level } });
+    expect(availableJobs(skilled).some((j) => j.id === "tech")).toBe(true);
+    expect(takeJob(skilled, "tech").job).toBe("tech");
+  });
+});
+
+describe("hustle", () => {
+  it("earns naira, costs a little health, and is capped per year", () => {
+    let c = baseCharacter({ stats: { happiness: 50, health: 50, smarts: 50, looks: 50, naira: 0 } });
+    for (let i = 0; i < MAX_HUSTLES_PER_YEAR; i++) {
+      const before = c.stats.naira;
+      c = hustle(c);
+      expect(c.stats.naira).toBeGreaterThan(before);
+      expect(c.hustlesThisYear).toBe(i + 1);
+    }
+    const capped = hustle(c); // one more than the cap
+    expect(capped).toBe(c);
+  });
+
+  it("ageUp resets the per-year hustle cap", () => {
+    const maxedOut = baseCharacter({ hustlesThisYear: MAX_HUSTLES_PER_YEAR });
+    const next = ageUp(maxedOut);
+    expect(next.hustlesThisYear).toBe(0);
+  });
+
+  it("guarantees meeting the hardest band's earn requirement using only the max hustles per year, even with every roll at its floor", () => {
+    // Regression test for a real bug: hustle's original 500-1,500 range
+    // could bottom out at 1,500 total over 3 uses, never reaching the
+    // adult band's 3,000 minEarn — an unemployed adult with no
+    // money-earning event that year had no way to ever age up. Run many
+    // times since hustle is randomized; every run must clear the bar.
+    const hardestReq = Math.max(...Object.values(AGE_UP_REQUIREMENTS).map((r) => r.minEarn));
+    for (let trial = 0; trial < 50; trial++) {
+      let c = baseCharacter({ earnedThisYear: 0 });
+      for (let i = 0; i < MAX_HUSTLES_PER_YEAR; i++) c = hustle(c);
+      expect(c.earnedThisYear).toBeGreaterThanOrEqual(hardestReq);
+    }
+  });
+});
+
+describe("marriage", () => {
+  it("marries the character, grants a happiness boost, and logs it", () => {
+    const c = baseCharacter({ stats: { happiness: 50, health: 50, smarts: 50, looks: 50, naira: 0 } });
+    const next = marry(c, "spouse-uid-123", "Tunde");
+    expect(next.spouseUid).toBe("spouse-uid-123");
+    expect(next.spouseName).toBe("Tunde");
+    expect(next.stats.happiness).toBe(60);
+    expect(next.log.at(-1)).toContain("Married Tunde");
+  });
+
+  it("refuses to marry a character who's already married", () => {
+    const married = baseCharacter({ spouseUid: "existing-spouse", spouseName: "Bisi" });
+    const next = marry(married, "someone-else", "Chidi");
+    expect(next).toBe(married);
+  });
+});
+
+describe("earn/spend-to-age-up requirement", () => {
+  it("an employed adult automatically meets the earn requirement the moment the year starts, from job income alone", () => {
+    const employed = baseCharacter({ age: 20, job: "hawker" });
+    const next = ageUp(employed);
+    expect(meetsAgeUpRequirements(next)).toBe(false); // earned yes, but hasn't spent anything yet
+    expect(next.earnedThisYear).toBeGreaterThan(0);
+  });
+
+  it("is met once both earned and spent reach the band's thresholds", () => {
+    const c = baseCharacter({ age: 20, earnedThisYear: 3000, spentThisYear: 3000 });
+    expect(meetsAgeUpRequirements(c)).toBe(true);
+  });
+
+  it("infants and children have no requirement at all", () => {
+    const baby = baseCharacter({ age: 1, earnedThisYear: 0, spentThisYear: 0 });
+    expect(meetsAgeUpRequirements(baby)).toBe(true);
+    const kid = baseCharacter({ age: 8, earnedThisYear: 0, spentThisYear: 0 });
+    expect(meetsAgeUpRequirements(kid)).toBe(true);
   });
 });

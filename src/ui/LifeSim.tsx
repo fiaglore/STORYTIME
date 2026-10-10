@@ -3,19 +3,28 @@ import {
   ageUp,
   applyDelta,
   availableJobs,
+  bandForAge,
+  buyItem,
   createCharacter,
+  hustle,
   isChoiceAvailable,
   lifeStageForAge,
+  meetsAgeUpRequirements,
   pickEvent,
   resolveChore,
   resolveEvent,
   takeJob,
+  trainSkill,
+  AGE_UP_REQUIREMENTS,
   JOBS,
+  MAX_HUSTLES_PER_YEAR,
   type LifeCharacter,
   type JobId,
 } from "../engine/lifeSim";
 import type { LifeEvent } from "../content/lifeEvents";
 import { pickChores, type Chore } from "../content/chores";
+import { SHOP_ITEMS, type ShopItem } from "../content/shop";
+import { SKILLS, SKILL_TRAIN_COST, type Skill } from "../content/skills";
 import { fetchCloudSave, writeCloudSave } from "../engine/firebase";
 import { useAuthStore } from "../engine/authStore";
 import { AccountSection } from "./AccountSection";
@@ -80,6 +89,8 @@ export function LifeSim({ onExit }: Props) {
   const [nameInput, setNameInput] = useState("");
   const [activeEvent, setActiveEvent] = useState<LifeEvent | null>(null);
   const [showJobs, setShowJobs] = useState(false);
+  const [showShop, setShowShop] = useState(false);
+  const [showSkills, setShowSkills] = useState(false);
   const [pendingJob, setPendingJob] = useState<JobId | null>(null);
   // Not persisted in the save — a reload just rolls a fresh set of chores
   // for the current year rather than remembering which were already done,
@@ -121,8 +132,31 @@ export function LifeSim({ onExit }: Props) {
     setPendingChores((cs) => cs.filter((c) => c.id !== chore.id));
   };
 
+  const handleBuy = (item: ShopItem) => {
+    if (!character) return;
+    setCharacter(buyItem(character, item));
+  };
+
+  const handleTrain = (skill: Skill) => {
+    if (!character) return;
+    setCharacter(trainSkill(character, skill, SKILL_TRAIN_COST));
+  };
+
+  const handleHustle = () => {
+    if (!character) return;
+    setCharacter(hustle(character));
+  };
+
   const handleAgeUp = () => {
-    if (!character || !character.alive || activeEvent || pendingJob || pendingChores.length > 0) return;
+    if (
+      !character ||
+      !character.alive ||
+      activeEvent ||
+      pendingJob ||
+      pendingChores.length > 0 ||
+      !meetsAgeUpRequirements(character)
+    )
+      return;
     const aged = ageUp(character);
     setCharacter(aged);
     if (aged.alive) {
@@ -157,6 +191,9 @@ export function LifeSim({ onExit }: Props) {
     setCharacter(null);
     setNameInput("");
     setPendingChores([]);
+    setShowJobs(false);
+    setShowShop(false);
+    setShowSkills(false);
   };
 
   if (!character) {
@@ -306,14 +343,42 @@ export function LifeSim({ onExit }: Props) {
         </div>
       </div>
 
-      <p className="lifesim-job">
-        {job ? `Working as a ${job.title}` : "No job yet"}
+      <p className="lifesim-job">{job ? `Working as a ${job.title}` : "No job yet"}</p>
+
+      <div className="lifesim-tabs">
         {character.age >= 18 && (
-          <button className="lifesim-job__button" onClick={() => setShowJobs((s) => !s)}>
+          <button
+            className={`lifesim-tab ${showJobs ? "lifesim-tab--active" : ""}`}
+            onClick={() => {
+              setShowJobs((s) => !s);
+              setShowShop(false);
+              setShowSkills(false);
+            }}
+          >
             {job ? "Change job" : "Get a job"}
           </button>
         )}
-      </p>
+        <button
+          className={`lifesim-tab ${showShop ? "lifesim-tab--active" : ""}`}
+          onClick={() => {
+            setShowShop((s) => !s);
+            setShowJobs(false);
+            setShowSkills(false);
+          }}
+        >
+          Shop
+        </button>
+        <button
+          className={`lifesim-tab ${showSkills ? "lifesim-tab--active" : ""}`}
+          onClick={() => {
+            setShowSkills((s) => !s);
+            setShowJobs(false);
+            setShowShop(false);
+          }}
+        >
+          Skills
+        </button>
+      </div>
 
       {showJobs && !pendingJob && (
         <div className="lifesim-jobs">
@@ -326,6 +391,60 @@ export function LifeSim({ onExit }: Props) {
               {j.title} — ~₦{j.payPerYear.toLocaleString()}/yr
             </button>
           ))}
+          {availableJobs(character).every((j) => j.id === "hawker") && (
+            <p className="lifesim-hint">Train a skill to unlock better-paying work.</p>
+          )}
+        </div>
+      )}
+
+      {showShop && (
+        <div className="lifesim-shop">
+          {SHOP_ITEMS.map((item) => {
+            const owned = character.inventory.includes(item.id);
+            const afford = character.stats.naira >= item.price;
+            return (
+              <div key={item.id} className="lifesim-shop__item">
+                <div className="lifesim-shop__info">
+                  <span className="lifesim-shop__name">{item.name}</span>
+                  <span className="lifesim-shop__desc">{item.description}</span>
+                </div>
+                <button
+                  className="rpg-choice-pill lifesim-shop__buy"
+                  onClick={() => handleBuy(item)}
+                  disabled={owned || !afford}
+                >
+                  {owned ? "Owned" : `₦${item.price.toLocaleString()}`}
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {showSkills && (
+        <div className="lifesim-skills">
+          {SKILLS.map((skill) => {
+            const level = character.skills[skill.id] ?? 0;
+            const afford = character.stats.naira >= SKILL_TRAIN_COST;
+            return (
+              <div key={skill.id} className="lifesim-skill">
+                <div className="lifesim-skill__row">
+                  <span className="lifesim-skill__name">{skill.name}</span>
+                  <span className="meter__value">{level}</span>
+                </div>
+                <div className="meter__track">
+                  <div className="meter__fill" style={{ width: `${level}%`, background: "var(--accent)" }} />
+                </div>
+                <button
+                  className="rpg-choice-pill lifesim-skill__train"
+                  onClick={() => handleTrain(skill)}
+                  disabled={!afford || level >= 100}
+                >
+                  {level >= 100 ? "Maxed" : `Practice — ₦${SKILL_TRAIN_COST.toLocaleString()}`}
+                </button>
+              </div>
+            );
+          })}
         </div>
       )}
 
@@ -379,6 +498,49 @@ export function LifeSim({ onExit }: Props) {
             Done
           </button>
         </div>
+      ) : !meetsAgeUpRequirements(character) ? (
+        (() => {
+          const req = AGE_UP_REQUIREMENTS[bandForAge(character.age)];
+          return (
+            <div className="lifesim-requirement">
+              <p className="lifesim-requirement__counter">Before you can age up</p>
+              <div className="lifesim-requirement__row">
+                <span>Earned ₦{character.earnedThisYear.toLocaleString()} / ₦{req.minEarn.toLocaleString()}</span>
+                <div className="meter__track">
+                  <div
+                    className="meter__fill"
+                    style={{
+                      width: `${Math.min(100, (character.earnedThisYear / req.minEarn) * 100)}%`,
+                      background: "var(--naira)",
+                    }}
+                  />
+                </div>
+              </div>
+              <div className="lifesim-requirement__row">
+                <span>Spent ₦{character.spentThisYear.toLocaleString()} / ₦{req.minSpend.toLocaleString()}</span>
+                <div className="meter__track">
+                  <div
+                    className="meter__fill"
+                    style={{
+                      width: `${Math.min(100, (character.spentThisYear / req.minSpend) * 100)}%`,
+                      background: "var(--accent)",
+                    }}
+                  />
+                </div>
+              </div>
+              <button
+                className="choice-button"
+                onClick={handleHustle}
+                disabled={character.hustlesThisYear >= MAX_HUSTLES_PER_YEAR}
+              >
+                {character.hustlesThisYear >= MAX_HUSTLES_PER_YEAR
+                  ? "No more hustle left in you this year"
+                  : `Hustle for quick cash (${MAX_HUSTLES_PER_YEAR - character.hustlesThisYear} left)`}
+              </button>
+              <p className="lifesim-hint">Short on spend? The Shop always has something cheap.</p>
+            </div>
+          );
+        })()
       ) : (
         !pendingJob && (
           <button className="choice-button choice-button--primary lifesim-age-up" onClick={handleAgeUp}>

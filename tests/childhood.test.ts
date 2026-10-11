@@ -38,6 +38,8 @@ function baseCharacter(overrides: Partial<LifeCharacter> = {}): LifeCharacter {
     sentTransfers: [],
     schoolId: null,
     choreGameHistory: {},
+    savings: 0,
+    loanBalance: 0,
     ...overrides,
   };
 }

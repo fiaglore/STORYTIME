@@ -20,6 +20,14 @@ export interface EventRule {
   requiresOwned?: OwnedGroup[];
   excludesOwned?: OwnedGroup[];
   unmarried?: boolean;
+  // Must currently be carrying an active loan (LifeCharacter.loanBalance
+  // > 0) — the debt-collector events below only fire on someone who
+  // actually owes something.
+  requiresDebt?: boolean;
+  // Must currently owe at least this much — lets debt escalate in flavor
+  // as it compounds unpaid (a small balance gets a debt-collector visit;
+  // a balance that's grown past this gets real loan-shark pressure).
+  minDebt?: number;
 }
 
 // The "everyday struggle" threshold, in line with the chores' maxNaira values.
@@ -73,6 +81,12 @@ export const EVENT_RULES: Record<string, EventRule> = {
   "chieftaincy-title": { minNaira: 1_500_000 },
   "downsize-the-house": { requiresOwned: ["home"] },
   "mentor-at-work": { requiresJob: true },
+  // Debt has teeth: these only fire on someone actually carrying a loan.
+  // A small balance gets a debt-collector visit; one that's grown past
+  // minDebt (unpaid and compounding at LOAN_INTEREST_RATE) escalates to
+  // real pressure.
+  "debt-collector-visit": { requiresDebt: true },
+  "loan-shark-pressure": { requiresDebt: true, minDebt: 1_000_000 },
 };
 
 export function isEventAllowed(character: LifeCharacter, event: Pick<LifeEvent, "id">): boolean {
@@ -90,5 +104,7 @@ export function isEventAllowed(character: LifeCharacter, event: Pick<LifeEvent, 
   if (rule.requiresOwned && !rule.requiresOwned.every((g) => owns(character, g))) return false;
   if (rule.excludesOwned && rule.excludesOwned.some((g) => owns(character, g))) return false;
   if (rule.unmarried && character.spouseUid) return false;
+  if (rule.requiresDebt && character.loanBalance <= 0) return false;
+  if (rule.minDebt != null && character.loanBalance < rule.minDebt) return false;
   return true;
 }

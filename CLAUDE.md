@@ -320,6 +320,46 @@ the single surviving mode, `src/ui/LifeSim.tsx`.
   caller skips the UI's filtering" principle as `resolveEvent`/
   `isChoiceAvailable` — the Jobs tab itself is hidden once retired since
   there's nothing left to do there.
+- **Bank: savings, loans, and inflation** (the "Bank" tab in
+  `LifeSim.tsx`, shown for signed-in-or-not characters age 18+ same as
+  the Jobs tab): `LifeCharacter.savings`/`loanBalance` are side ledgers,
+  same shape as `pensionSavings` — not spendable as `stats.naira` until
+  moved there. `depositToSavings`/`withdrawFromSavings` and `takeLoan`/
+  `repayLoan` in `lifeSim.ts` are all "refuse rather than throw" the same
+  as every other gated mutator here, and all route through `trackNaira`
+  like any other naira-moving action (a deposit counts as spent, a
+  withdrawal or a loan payout counts as earned — same direction a real
+  bank transaction would for Age Up's earn/spend requirement).
+  `takeLoan` only allows one active loan at a time (same "one active X"
+  shape as `retire()`), requires a job (no job, no credit history), and
+  caps at `MAX_LOAN_AMOUNT` (₦3M — a meaningful amount against
+  `JOBS`' top `payPerYear` of ₦2.2M, without trivializing the economy).
+  `ageUp` compounds both ledgers every year by `SAVINGS_INTEREST_RATE`/
+  `LOAN_INTEREST_RATE` silently (no per-year log line, same as
+  `pensionSavings` growing quietly while still working) — purely a side
+  ledger, so this can't interact with `AGE_UP_REQUIREMENTS` or the
+  `hustle()` floor regression test.
+  **Inflation** (`INFLATION_RATE`, 16%/yr — realistic for Nigeria)
+  deliberately does *not* retroactively rescale the ~300 already-
+  calibrated event/chore/job naira values in this codebase: that would
+  mean rewriting every exact-value regression test across the suite and
+  risking a silent break of the `hustle()` floor invariant, for a purely
+  cosmetic nominal rescale. Instead inflation shows up exactly where it
+  matters to the player: `SAVINGS_INTEREST_RATE` (7%/yr) is set *below*
+  inflation, same as a real Nigerian savings account — money in the bank
+  still loses real value, just slower than cash; `LOAN_INTEREST_RATE`
+  (32%/yr) is set *above* inflation — the lender's real margin, and why
+  an unpaid loan compounds fast. Naira left sitting in `stats.naira`,
+  un-deposited, earns nothing at all. "Debt has teeth" per the design
+  ask: two new events, `debt-collector-visit`/`loan-shark-pressure`
+  (`lifeEvents.ts`), only fire on a character actually carrying a loan —
+  `EventRule.requiresDebt`/`minDebt` in `eventRules.ts` gate them
+  (`loan-shark-pressure` only once the balance has grown past `minDebt`,
+  letting the flavor escalate the longer a loan goes unpaid). Their
+  "pay something now" choices use a new `EventChoice.repaysLoanAmount`
+  field, resolved in `resolveEvent` alongside the choice's normal naira
+  delta — a choice special-field, same shape as `grantsAsset`, since
+  `loanBalance` is a side ledger `StatDelta` doesn't touch.
 - Smarts/looks/happiness, owned assets/items, and chore mastery all
   change gameplay now, not just the stat numbers themselves —
   `src/engine/modifiers.ts` and `src/content/ownership.ts` hold the pure

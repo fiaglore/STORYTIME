@@ -1,15 +1,24 @@
 import { describe, expect, it } from "vitest";
 import {
   AGE_UP_REQUIREMENTS,
+  INFLATION_RATE,
+  LOAN_INTEREST_RATE,
   MAX_HUSTLES_PER_YEAR,
+  MAX_LOAN_AMOUNT,
+  SAVINGS_INTEREST_RATE,
   SELL_RATE,
   ageUp,
   availableJobs,
   buyItem,
+  depositToSavings,
   hustle,
   pickEvents,
+  repayLoan,
   resolveChore,
+  resolveEvent,
   sellItem,
+  takeLoan,
+  withdrawFromSavings,
   type LifeCharacter,
 } from "../src/engine/lifeSim";
 import { bandForAge } from "../src/content/lifeEvents";
@@ -58,6 +67,8 @@ function baseCharacter(overrides: Partial<LifeCharacter> = {}): LifeCharacter {
     pensionPerYear: 0,
     retired: false,
     choreGameHistory: {},
+    savings: 0,
+    loanBalance: 0,
     ...overrides,
   };
 }
@@ -345,5 +356,122 @@ describe("elder band (age 60+)", () => {
     const elderChores = CHORES.filter((c) => c.bands.includes("elder"));
     const adultChores = CHORES.filter((c) => c.bands.includes("adult"));
     expect(elderChores.length).toBe(adultChores.length);
+  });
+});
+
+describe("economy: savings, loans, interest", () => {
+  describe("savings", () => {
+    it("deposits move naira into savings and count as spent this year", () => {
+      const c = baseCharacter({ stats: withNaira(10000), earnedThisYear: 0, spentThisYear: 0 });
+      const next = depositToSavings(c, 4000);
+      expect(next.stats.naira).toBe(6000);
+      expect(next.savings).toBe(4000);
+      expect(next.spentThisYear).toBe(4000);
+    });
+
+    it("refuses a deposit that isn't positive or exceeds current naira", () => {
+      const c = baseCharacter({ stats: withNaira(1000) });
+      expect(depositToSavings(c, 0).savings).toBe(0);
+      expect(depositToSavings(c, -5).savings).toBe(0);
+      expect(depositToSavings(c, 2000).savings).toBe(0);
+    });
+
+    it("withdrawals move savings back to naira and count as earned this year", () => {
+      const c = baseCharacter({ stats: withNaira(0), savings: 5000, earnedThisYear: 0 });
+      const next = withdrawFromSavings(c, 3000);
+      expect(next.stats.naira).toBe(3000);
+      expect(next.savings).toBe(2000);
+      expect(next.earnedThisYear).toBe(3000);
+    });
+
+    it("refuses a withdrawal larger than the savings balance", () => {
+      const c = baseCharacter({ savings: 1000 });
+      expect(withdrawFromSavings(c, 2000).savings).toBe(1000);
+    });
+
+    it("savings compound by SAVINGS_INTEREST_RATE every ageUp, independent of stats.naira", () => {
+      const c = baseCharacter({ age: 30, savings: 10000, job: "none", stats: withNaira(0) });
+      const next = ageUp(c);
+      expect(next.savings).toBe(Math.round(10000 * (1 + SAVINGS_INTEREST_RATE)));
+    });
+  });
+
+  describe("loans", () => {
+    it("taking a loan requires a job and adds to naira, counted as earned", () => {
+      const unemployed = baseCharacter({ job: "none", earnedThisYear: 0 });
+      expect(takeLoan(unemployed, 500000).loanBalance).toBe(0);
+
+      const employed = baseCharacter({ job: "hawker", stats: withNaira(0), earnedThisYear: 0 });
+      const next = takeLoan(employed, 500000);
+      expect(next.stats.naira).toBe(500000);
+      expect(next.loanBalance).toBe(500000);
+      expect(next.earnedThisYear).toBe(500000);
+    });
+
+    it("refuses a second loan while one is already outstanding", () => {
+      const c = baseCharacter({ job: "hawker", loanBalance: 200000 });
+      expect(takeLoan(c, 100000).loanBalance).toBe(200000);
+    });
+
+    it("refuses a loan over MAX_LOAN_AMOUNT or that isn't positive", () => {
+      const c = baseCharacter({ job: "hawker" });
+      expect(takeLoan(c, MAX_LOAN_AMOUNT + 1).loanBalance).toBe(0);
+      expect(takeLoan(c, 0).loanBalance).toBe(0);
+    });
+
+    it("repaying reduces the loan balance and naira, counted as spent", () => {
+      const c = baseCharacter({ loanBalance: 100000, stats: withNaira(100000), spentThisYear: 0 });
+      const next = repayLoan(c, 60000);
+      expect(next.loanBalance).toBe(40000);
+      expect(next.stats.naira).toBe(40000);
+      expect(next.spentThisYear).toBe(60000);
+    });
+
+    it("refuses repaying more than the balance or more than the character can afford", () => {
+      const c = baseCharacter({ loanBalance: 50000, stats: withNaira(1000) });
+      expect(repayLoan(c, 60000).loanBalance).toBe(50000); // over the balance
+      const poor = baseCharacter({ loanBalance: 50000, stats: withNaira(10) });
+      expect(repayLoan(poor, 20000).loanBalance).toBe(50000); // can't afford it
+    });
+
+    it("an unpaid loan compounds by LOAN_INTEREST_RATE every ageUp", () => {
+      const c = baseCharacter({ age: 30, loanBalance: 100000, job: "none", stats: withNaira(0) });
+      const next = ageUp(c);
+      expect(next.loanBalance).toBe(Math.round(100000 * (1 + LOAN_INTEREST_RATE)));
+    });
+
+    it("a fully repaid loan (0 balance) doesn't grow on ageUp", () => {
+      const c = baseCharacter({ age: 30, loanBalance: 0, job: "none", stats: withNaira(0) });
+      expect(ageUp(c).loanBalance).toBe(0);
+    });
+  });
+
+  describe("debt has consequences", () => {
+    it("debt-collector-visit only fires on a character actually carrying a loan", () => {
+      const noDebt = baseCharacter({ age: 30, loanBalance: 0 });
+      const inDebt = baseCharacter({ age: 30, loanBalance: 100000 });
+      expect(isEventAllowed(noDebt, { id: "debt-collector-visit" })).toBe(false);
+      expect(isEventAllowed(inDebt, { id: "debt-collector-visit" })).toBe(true);
+    });
+
+    it("loan-shark-pressure only escalates once the balance passes minDebt", () => {
+      const small = baseCharacter({ age: 30, loanBalance: 50000 });
+      const big = baseCharacter({ age: 30, loanBalance: 1_500_000 });
+      expect(isEventAllowed(small, { id: "loan-shark-pressure" })).toBe(false);
+      expect(isEventAllowed(big, { id: "loan-shark-pressure" })).toBe(true);
+    });
+
+    it("resolving a choice with repaysLoanAmount reduces loanBalance, floored at 0", () => {
+      const event = LIFE_EVENTS.find((e) => e.id === "debt-collector-visit")!;
+      const payIndex = event.choices.findIndex((c) => c.repaysLoanAmount);
+      const c = baseCharacter({ age: 30, loanBalance: 30000, stats: withNaira(1_000_000) });
+      const next = resolveEvent(c, event, payIndex);
+      expect(next.loanBalance).toBe(0); // 30,000 balance - 50,000 repaysLoanAmount, floored at 0
+    });
+  });
+
+  it("inflation backdrop: savings grow slower than inflation, loans grow faster", () => {
+    expect(SAVINGS_INTEREST_RATE).toBeLessThan(INFLATION_RATE);
+    expect(LOAN_INTEREST_RATE).toBeGreaterThan(INFLATION_RATE);
   });
 });

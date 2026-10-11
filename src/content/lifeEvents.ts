@@ -55,6 +55,13 @@ export interface EventChoice {
   requiresNaira?: number;
   // Resolving this choice adds this asset to the character permanently.
   grantsAsset?: AssetId;
+  // Resolving this choice reduces LifeCharacter.loanBalance by up to this
+  // much (floored at 0), on top of whatever naira delta already paid for
+  // it — a choice special-field, same shape as grantsAsset, rather than
+  // something StatDelta tracks (loanBalance is a side ledger, not a core
+  // stat). See takeLoan/repayLoan in lifeSim.ts and the debt-collector
+  // events below.
+  repaysLoanAmount?: number;
   // The "choosing a risky option could kill or maim them" gate — see
   // EventRisk above. Most choices don't carry this; it's reserved for
   // choices whose flavor text is already describing real danger (racing
@@ -1396,6 +1403,44 @@ export const LIFE_EVENTS: LifeEvent[] = [
       {
         label: "Explain you can't manage it this time",
         result: "She understands, but it stings to say no.",
+        delta: { happiness: -2 },
+      },
+    ],
+  },
+  {
+    id: "debt-collector-visit",
+    bands: ["adult", "elder"],
+    prompt: "Agents from the loan company show up about the balance you still owe.",
+    choices: [
+      {
+        label: "Pay what you can right now",
+        result: "It's an uncomfortable visit, but they leave once they see cash.",
+        delta: { naira: -50000, happiness: -2 },
+        requiresNaira: 50000,
+        repaysLoanAmount: 50000,
+      },
+      {
+        label: "Tell them you need more time",
+        result: "They leave, unhappy. The balance keeps growing either way.",
+        delta: { happiness: -3 },
+      },
+    ],
+  },
+  {
+    id: "loan-shark-pressure",
+    bands: ["adult", "elder"],
+    prompt: "The loan company calls daily now, and the balance only seems to climb.",
+    choices: [
+      {
+        label: "Clear a big chunk of it",
+        result: "Painful, but the calls stop for a while.",
+        delta: { naira: -150000, happiness: -1 },
+        requiresNaira: 150000,
+        repaysLoanAmount: 150000,
+      },
+      {
+        label: "Block the number and worry about it later",
+        result: "Peace of mind now, a bigger problem later — the interest doesn't care that you're not answering.",
         delta: { happiness: -2 },
       },
     ],

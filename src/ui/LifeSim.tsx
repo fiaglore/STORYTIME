@@ -8,12 +8,14 @@ import {
   changeFaith,
   chooseSchool,
   createCharacter,
+  depositToSavings,
   hustle,
   isChoiceAvailable,
   lifeStageForAge,
   meetsAgeUpRequirements,
   migrateCharacter,
   pray,
+  repayLoan,
   rollYearWork,
   sellItem,
   pickChoreGameVariant,
@@ -26,20 +28,26 @@ import {
   summarizeLife,
   formatObituaryText,
   takeJob,
+  takeLoan,
   talkToClassroomNPC,
   treatInjury,
+  withdrawFromSavings,
   MAX_PRAYERS_PER_YEAR,
   trainSkill,
   AGE_SCHOOL_CHOICE_CUTOFF,
   AGE_UP_REQUIREMENTS,
   CRITICAL_HEALTH_THRESHOLD,
+  INFLATION_RATE,
   JOBS,
+  LOAN_INTEREST_RATE,
   MAX_CLASSROOM_TALKS_PER_YEAR,
   MAX_HUSTLES_PER_YEAR,
+  MAX_LOAN_AMOUNT,
   PENSION_ANNUITY_RATE,
   RETIREMENT_AGE,
   REVIVE_COST,
   SAVE_VERSION,
+  SAVINGS_INTEREST_RATE,
   TREATMENT_COST,
   type LifeCharacter,
   type JobId,
@@ -211,6 +219,8 @@ export function LifeSim({ onExit }: Props) {
   const [shopSearch, setShopSearch] = useState("");
   const [shopView, setShopView] = useState<"browse" | "owned">("browse");
   const [showSkills, setShowSkills] = useState(false);
+  const [showBank, setShowBank] = useState(false);
+  const [bankAmount, setBankAmount] = useState("");
   const [showMarriage, setShowMarriage] = useState(false);
   const [showClassroom, setShowClassroom] = useState(false);
   const [classroomMessage, setClassroomMessage] = useState<string | null>(null);
@@ -346,6 +356,33 @@ export function LifeSim({ onExit }: Props) {
     setCharacter(hustle(character));
   };
 
+  const parsedBankAmount = Math.floor(Number(bankAmount));
+  const validBankAmount = bankAmount !== "" && Number.isFinite(parsedBankAmount) && parsedBankAmount > 0;
+
+  const handleDeposit = () => {
+    if (!character || !validBankAmount) return;
+    setCharacter(depositToSavings(character, parsedBankAmount));
+    setBankAmount("");
+  };
+
+  const handleWithdraw = () => {
+    if (!character || !validBankAmount) return;
+    setCharacter(withdrawFromSavings(character, parsedBankAmount));
+    setBankAmount("");
+  };
+
+  const handleTakeLoan = () => {
+    if (!character || !validBankAmount) return;
+    setCharacter(takeLoan(character, parsedBankAmount));
+    setBankAmount("");
+  };
+
+  const handleRepayLoan = () => {
+    if (!character || !validBankAmount) return;
+    setCharacter(repayLoan(character, parsedBankAmount));
+    setBankAmount("");
+  };
+
   const [prayerMessage, setPrayerMessage] = useState<string | null>(null);
   const [showFullLog, setShowFullLog] = useState(false);
   const [obituaryCopied, setObituaryCopied] = useState(false);
@@ -456,6 +493,8 @@ export function LifeSim({ onExit }: Props) {
     setShowJobs(false);
     setShowShop(false);
     setShowSkills(false);
+    setShowBank(false);
+    setBankAmount("");
     setShowMarriage(false);
     setShowSettings(false);
     setShowClassroom(false);
@@ -789,6 +828,7 @@ export function LifeSim({ onExit }: Props) {
               setShowJobs((s) => !s);
               setShowShop(false);
               setShowSkills(false);
+              setShowBank(false);
               setShowMarriage(false);
               setShowSettings(false);
               setShowClassroom(false);
@@ -803,6 +843,7 @@ export function LifeSim({ onExit }: Props) {
             setShowShop((s) => !s);
             setShowJobs(false);
             setShowSkills(false);
+            setShowBank(false);
             setShowMarriage(false);
             setShowSettings(false);
             setShowClassroom(false);
@@ -816,6 +857,7 @@ export function LifeSim({ onExit }: Props) {
             setShowSkills((s) => !s);
             setShowJobs(false);
             setShowShop(false);
+            setShowBank(false);
             setShowMarriage(false);
             setShowSettings(false);
             setShowClassroom(false);
@@ -823,6 +865,23 @@ export function LifeSim({ onExit }: Props) {
         >
           Skills
         </button>
+        {character.age >= 18 && (
+          <button
+            className={`lifesim-tab ${showBank ? "lifesim-tab--active" : ""}`}
+            onClick={() => {
+              setShowBank((s) => !s);
+              setBankAmount("");
+              setShowJobs(false);
+              setShowShop(false);
+              setShowSkills(false);
+              setShowMarriage(false);
+              setShowSettings(false);
+              setShowClassroom(false);
+            }}
+          >
+            Bank
+          </button>
+        )}
         {character.schoolId && character.age >= CLASSROOM_MIN_AGE && character.age <= CLASSROOM_MAX_AGE && (
           <button
             className={`lifesim-tab ${showClassroom ? "lifesim-tab--active" : ""}`}
@@ -831,6 +890,7 @@ export function LifeSim({ onExit }: Props) {
               setShowJobs(false);
               setShowShop(false);
               setShowSkills(false);
+              setShowBank(false);
               setShowMarriage(false);
               setShowSettings(false);
             }}
@@ -846,6 +906,7 @@ export function LifeSim({ onExit }: Props) {
               setShowJobs(false);
               setShowShop(false);
               setShowSkills(false);
+              setShowBank(false);
               setShowSettings(false);
               setShowClassroom(false);
             }}
@@ -860,6 +921,7 @@ export function LifeSim({ onExit }: Props) {
             setShowJobs(false);
             setShowShop(false);
             setShowSkills(false);
+            setShowBank(false);
             setShowMarriage(false);
             setShowClassroom(false);
           }}
@@ -986,6 +1048,80 @@ export function LifeSim({ onExit }: Props) {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {showBank && (
+        <div className="lifesim-bank">
+          <p className="lifesim-hint">
+            Inflation is running at {Math.round(INFLATION_RATE * 100)}%/yr — idle cash under the mattress loses
+            value every year. Savings pay {Math.round(SAVINGS_INTEREST_RATE * 100)}%/yr (still below inflation, but
+            better than nothing); a loan costs {Math.round(LOAN_INTEREST_RATE * 100)}%/yr, so an unpaid balance
+            grows fast.
+          </p>
+
+          <div className="lifesim-bank__row">
+            <span>Savings</span>
+            <span className="lifesim-bank__value">₦{character.savings.toLocaleString()}</span>
+          </div>
+          <div className="lifesim-bank__row">
+            <span>Loan balance</span>
+            <span className="lifesim-bank__value">₦{character.loanBalance.toLocaleString()}</span>
+          </div>
+
+          <input
+            type="number"
+            className="lifesim-intro__input"
+            placeholder="Amount (₦)"
+            min={1}
+            value={bankAmount}
+            onChange={(e) => setBankAmount(e.target.value)}
+          />
+
+          <div className="lifesim-bank__actions">
+            <button
+              className="rpg-choice-pill"
+              onClick={handleDeposit}
+              disabled={!validBankAmount || parsedBankAmount > character.stats.naira}
+            >
+              Deposit to savings
+            </button>
+            <button
+              className="rpg-choice-pill"
+              onClick={handleWithdraw}
+              disabled={!validBankAmount || parsedBankAmount > character.savings}
+            >
+              Withdraw from savings
+            </button>
+          </div>
+
+          <div className="lifesim-bank__actions">
+            <button
+              className="rpg-choice-pill"
+              onClick={handleTakeLoan}
+              disabled={
+                !validBankAmount ||
+                character.loanBalance > 0 ||
+                character.job === "none" ||
+                parsedBankAmount > MAX_LOAN_AMOUNT
+              }
+            >
+              {character.job === "none"
+                ? "Need a job to borrow"
+                : character.loanBalance > 0
+                  ? "Already have a loan"
+                  : `Take a loan (up to ₦${MAX_LOAN_AMOUNT.toLocaleString()})`}
+            </button>
+            <button
+              className="rpg-choice-pill"
+              onClick={handleRepayLoan}
+              disabled={
+                !validBankAmount || character.loanBalance <= 0 || parsedBankAmount > character.stats.naira
+              }
+            >
+              Repay loan
+            </button>
+          </div>
         </div>
       )}
 

@@ -571,11 +571,38 @@
 .lifesim-shop,
 .lifesim-skills,
 .lifesim-settings,
-.lifesim-classroom {
+.lifesim-classroom,
+.lifesim-bank {
   display: flex;
   flex-direction: column;
   gap: 0.6rem;
   margin-bottom: 0.75rem;
+}
+
+.lifesim-bank__row {
+  display: flex;
+  justify-content: space-between;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  padding: 0.6rem 0.85rem;
+  font-weight: 700;
+}
+
+.lifesim-bank__value {
+  color: var(--accent);
+}
+
+.lifesim-bank__actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.lifesim-bank__actions .rpg-choice-pill {
+  flex: 1;
+  min-width: 10rem;
+  text-align: center;
 }
 
 .lifesim-shop__filters {

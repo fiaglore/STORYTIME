@@ -177,6 +177,16 @@ export interface LifeCharacter {
   // (otherwise buy/sell/rebuy would farm its one-time stat boost). Optional so
   // older saves load fine.
   soldItemIds?: string[];
+  // A separate naira ledger that earns SAVINGS_INTEREST_RATE every year in
+  // ageUp — money here isn't spendable until withdrawn back to
+  // stats.naira (see depositToSavings/withdrawFromSavings), same
+  // "side ledger, not stats.naira itself" shape as pensionSavings.
+  savings: number;
+  // Outstanding balance on a single active loan (0 = no loan), compounding
+  // by LOAN_INTEREST_RATE every year in ageUp until repaid — see
+  // takeLoan/repayLoan/MAX_LOAN_AMOUNT. Only one loan at a time, same
+  // "one active X at a time" shape as retire()/pensionPerYear.
+  loanBalance: number;
 }
 
 export interface LifeStage {
@@ -290,6 +300,8 @@ export function createCharacter(opts: CreateCharacterOptions): LifeCharacter {
     pensionSavings: 0,
     pensionPerYear: 0,
     retired: false,
+    savings: 0,
+    loanBalance: 0,
   };
 }
 
@@ -492,6 +504,14 @@ export function ageUp(character: LifeCharacter): LifeCharacter {
     naira: income + (schoolDelta.naira ?? 0),
     smarts: (schoolDelta.smarts ?? 0) + passive.smarts,
   });
+  // Savings/loan interest compound as a side ledger, same as
+  // pensionSavings above — they don't touch stats.naira/income, so they
+  // can't interact with AGE_UP_REQUIREMENTS or the hustle() floor
+  // regression test. Silent compounding, same as pensionSavings growing
+  // while still working (no per-year log line) — only the Bank tab shows
+  // the running balance.
+  const savings = Math.round(character.savings * (1 + SAVINGS_INTEREST_RATE));
+  const loanBalance = Math.round(character.loanBalance * (1 + LOAN_INTEREST_RATE));
 
   // The school fee (if any) is this year's first spend, same as job
   // income is this year's first earning — trackNaira against a
@@ -505,6 +525,8 @@ export function ageUp(character: LifeCharacter): LifeCharacter {
     age: nextAge,
     stats,
     pensionSavings,
+    savings,
+    loanBalance,
     streak: nextStreak(character.streak, stats.health),
     earnedThisYear: income > 0 ? income : 0,
     spentThisYear,
@@ -574,6 +596,9 @@ export function resolveEvent(
       choice.grantsAsset && !character.assets.includes(choice.grantsAsset)
         ? [...character.assets, choice.grantsAsset]
         : character.assets,
+    loanBalance: choice.repaysLoanAmount
+      ? Math.max(0, character.loanBalance - choice.repaysLoanAmount)
+      : character.loanBalance,
     seenEventIds: character.seenEventIds.includes(event.id)
       ? character.seenEventIds
       : [...character.seenEventIds, event.id],
@@ -767,6 +792,91 @@ export function retire(character: LifeCharacter): LifeCharacter {
       ...character.log,
       `Age ${character.age}: Retired from ${title.toLowerCase()} — drawing a yearly pension.`,
     ],
+  };
+}
+
+// --- Bank: savings, loans, and the inflation backdrop they're priced
+// against. ---
+//
+// Nigeria's real inflation has run well into double digits for years —
+// INFLATION_RATE is that backdrop, not a per-item price multiplier
+// retrofitted onto the ~300 already-calibrated event/chore/job naira
+// values in this codebase (that would mean rewriting every exact-value
+// regression test and risk silently breaking the hustle-floor invariant
+// for a cosmetic nominal rescale). Instead inflation shows up exactly
+// where it matters to the player: the gap between SAVINGS_INTEREST_RATE
+// (below inflation, same as a real Nigerian savings account — money in
+// the bank still loses real value, just slower than cash) and
+// LOAN_INTEREST_RATE (well above inflation — the lender's real margin).
+// Naira just sitting in stats.naira, un-deposited, earns nothing at all.
+export const INFLATION_RATE = 0.16;
+export const SAVINGS_INTEREST_RATE = 0.07;
+export const LOAN_INTEREST_RATE = 0.32;
+
+// A flat cap rather than one scaled by wealth tier/band — simple, and
+// still a meaningful amount relative to adult-band job pay (JOBS' top
+// payPerYear is ₦2.2M) without trivializing the economy.
+export const MAX_LOAN_AMOUNT = 3_000_000;
+
+// Moves naira into the savings ledger — refuses (rather than throws) an
+// amount that isn't positive or that the character can't cover, same
+// "refuse rather than throw" pattern as every other gated mutator here.
+export function depositToSavings(character: LifeCharacter, amount: number): LifeCharacter {
+  if (amount <= 0 || amount > character.stats.naira) return character;
+  const prevNaira = character.stats.naira;
+  const stats = applyDelta(character.stats, { naira: -amount });
+  return {
+    ...character,
+    stats,
+    ...trackNaira(character, prevNaira, stats.naira),
+    savings: character.savings + amount,
+    log: [...character.log, `Age ${character.age}: Deposited ₦${amount.toLocaleString()} into savings.`],
+  };
+}
+
+export function withdrawFromSavings(character: LifeCharacter, amount: number): LifeCharacter {
+  if (amount <= 0 || amount > character.savings) return character;
+  const prevNaira = character.stats.naira;
+  const stats = applyDelta(character.stats, { naira: amount });
+  return {
+    ...character,
+    stats,
+    ...trackNaira(character, prevNaira, stats.naira),
+    savings: character.savings - amount,
+    log: [...character.log, `Age ${character.age}: Withdrew ₦${amount.toLocaleString()} from savings.`],
+  };
+}
+
+// Only one loan at a time (same shape as retire()/pensionPerYear), and
+// only to a character with a job — real lenders want proof of income,
+// and it keeps a brand-new unemployed teen from taking on debt. Refuses
+// over MAX_LOAN_AMOUNT or while a loan is already outstanding, rather
+// than stacking a second one on top.
+export function takeLoan(character: LifeCharacter, amount: number): LifeCharacter {
+  if (character.loanBalance > 0 || character.job === "none" || amount <= 0 || amount > MAX_LOAN_AMOUNT) {
+    return character;
+  }
+  const prevNaira = character.stats.naira;
+  const stats = applyDelta(character.stats, { naira: amount });
+  return {
+    ...character,
+    stats,
+    ...trackNaira(character, prevNaira, stats.naira),
+    loanBalance: amount,
+    log: [...character.log, `Age ${character.age}: Took out a ₦${amount.toLocaleString()} loan.`],
+  };
+}
+
+export function repayLoan(character: LifeCharacter, amount: number): LifeCharacter {
+  if (amount <= 0 || amount > character.loanBalance || amount > character.stats.naira) return character;
+  const prevNaira = character.stats.naira;
+  const stats = applyDelta(character.stats, { naira: -amount });
+  return {
+    ...character,
+    stats,
+    ...trackNaira(character, prevNaira, stats.naira),
+    loanBalance: character.loanBalance - amount,
+    log: [...character.log, `Age ${character.age}: Repaid ₦${amount.toLocaleString()} of the loan.`],
   };
 }
 
@@ -1109,7 +1219,7 @@ export function formatObituaryText(character: LifeCharacter): string {
 // number itself isn't branched on anywhere, it's just there for the day a
 // real structural migration (not just "fill in a missing field") is
 // needed and something has to tell saves apart.
-export const SAVE_VERSION = 2;
+export const SAVE_VERSION = 3;
 
 export interface SaveFile {
   version: number;
@@ -1139,6 +1249,8 @@ const CHARACTER_FIELD_DEFAULTS = {
   pensionSavings: 0,
   pensionPerYear: 0,
   retired: false,
+  savings: 0,
+  loanBalance: 0,
 };
 
 // Takes whatever was actually in storage — a bare old-shape character

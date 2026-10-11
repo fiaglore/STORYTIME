@@ -44,6 +44,12 @@ function baseCharacter(overrides: Partial<LifeCharacter> = {}): LifeCharacter {
     yearsInJob: 0,
     unemployedStreak: 0,
     businessCapital: 0,
+    secondarySchoolId: null,
+    jambScore: null,
+    jambAttempts: 0,
+    universityId: null,
+    universityYear: 0,
+    hasDegree: false,
     ...overrides,
   };
 }

@@ -19,7 +19,16 @@ import { SKILLS, type Skill } from "../content/skills";
 import type { ShopItem } from "../content/shop";
 import { WEALTH_TIERS, type FaithId, type WealthTierId } from "../content/characterCreation";
 import { PRAYER_FLAVORS, randomFlavor } from "../content/prayers";
-import { SCHOOLS, schoolsAvailableTo, type School } from "../content/schools";
+import {
+  SCHOOLS,
+  SECONDARY_SCHOOLS,
+  UNIVERSITIES,
+  schoolsAvailableTo,
+  secondarySchoolsAvailableTo,
+  universitiesAvailableTo,
+  type School,
+  type University,
+} from "../content/schools";
 import { randomClassroomLine, type ClassroomLine, type ClassroomNPC } from "../content/classroom";
 import { isEventAllowed } from "../content/eventRules";
 import { yearlyPassiveEffects } from "../content/ownership";
@@ -189,6 +198,24 @@ export interface LifeCharacter {
   // applying for the rest of childhood even if the family's wealth tier
   // wouldn't newly qualify for it today.
   schoolId: string | null;
+  // Same shape as schoolId, but for the SECONDARY_SCHOOL_START_AGE-
+  // SECONDARY_SCHOOL_END_AGE window (11-17) — a second, separate school
+  // choice, same "set once, never un-set, inert past the window" lifecycle.
+  secondarySchoolId: string | null;
+  // Null until takeJAMB is called; 0-400 (JAMB_UNIVERSITY_CUTOFF/
+  // JAMB_POLY_CUTOFF gate what it's enough for). Retaking overwrites it —
+  // there's no cap on attempts, same as a real candidate sitting JAMB
+  // again the following year.
+  jambScore: number | null;
+  jambAttempts: number;
+  // Set by enrollInUniversity, null until then and never re-set once a
+  // character graduates (hasDegree) — same "inert past the window"
+  // lifecycle as schoolId/secondarySchoolId.
+  universityId: string | null;
+  // Years of real progress made so far (an ASUU strike year doesn't
+  // increment this — see rollUniversityProgress/ASUU_STRIKE_CHANCE).
+  universityYear: number;
+  hasDegree: boolean;
   // Whether this character has bought any food-category shop item this
   // year — Age Up requires it be true past the school-choice window (see
   // meetsAgeUpRequirements), "the player needs food to eat" per the
@@ -364,6 +391,12 @@ export function createCharacter(opts: CreateCharacterOptions): LifeCharacter {
     yearsInJob: 0,
     unemployedStreak: 0,
     businessCapital: 0,
+    secondarySchoolId: null,
+    jambScore: null,
+    jambAttempts: 0,
+    universityId: null,
+    universityYear: 0,
+    hasDegree: false,
   };
 }
 
@@ -380,6 +413,129 @@ export function chooseSchool(character: LifeCharacter, school: School): LifeChar
     ...character,
     schoolId: school.id,
     log: [...character.log, `Age ${character.age}: Enrolled at ${school.name}.`],
+  };
+}
+
+// --- Education: secondary school, JAMB, university, ASUU strikes. ---
+
+// 11-17 — right after AGE_SCHOOL_CHOICE_CUTOFF through the end of the
+// teen band, same "one extra step, not a replacement for real gameplay"
+// shape as primary school.
+export const SECONDARY_SCHOOL_START_AGE = AGE_SCHOOL_CHOICE_CUTOFF + 1;
+export const SECONDARY_SCHOOL_END_AGE = 17;
+
+export function chooseSecondarySchool(character: LifeCharacter, school: School): LifeCharacter {
+  if (!secondarySchoolsAvailableTo(character.wealthTier).some((s) => s.id === school.id)) return character;
+  return {
+    ...character,
+    secondarySchoolId: school.id,
+    log: [...character.log, `Age ${character.age}: Enrolled at ${school.name}.`],
+  };
+}
+
+// Real JAMB (UTME) scores run 0-400 — a candidate needs secondary school
+// behind them before sitting it, same as real life. Retaking is allowed
+// (no cap on jambAttempts) right up until a character actually enrolls in
+// a university or already holds a degree.
+export const JAMB_MIN_AGE = 17;
+export const JAMB_REGISTRATION_FEE = 25_000;
+export const JAMB_UNIVERSITY_CUTOFF = 200;
+export const JAMB_POLY_CUTOFF = 140;
+
+export function takeJAMB(character: LifeCharacter): LifeCharacter {
+  if (
+    character.age < JAMB_MIN_AGE ||
+    !character.secondarySchoolId ||
+    character.universityId ||
+    character.hasDegree ||
+    character.stats.naira < JAMB_REGISTRATION_FEE
+  ) {
+    return character;
+  }
+  // A better secondary school means better JAMB prep — same "ownership/
+  // investment pays off" direction as everything else in this file.
+  const secondary = SECONDARY_SCHOOLS.find((s) => s.id === character.secondarySchoolId);
+  const qualityBonus = secondary ? secondary.smartsPerYear * 8 : 0;
+  const score = Math.max(
+    0,
+    Math.min(400, randomInt(80, 160) + Math.round(character.stats.smarts * 1.8) + qualityBonus),
+  );
+  const prevNaira = character.stats.naira;
+  const stats = applyDelta(character.stats, { naira: -JAMB_REGISTRATION_FEE });
+  const resultLine =
+    score >= JAMB_UNIVERSITY_CUTOFF
+      ? `Scored ${score}/400 in JAMB — university admission is within reach.`
+      : score >= JAMB_POLY_CUTOFF
+        ? `Scored ${score}/400 in JAMB — not enough for university, but polytechnic is an option.`
+        : `Scored ${score}/400 in JAMB — not enough this time.`;
+  return {
+    ...character,
+    stats,
+    ...trackNaira(character, prevNaira, stats.naira),
+    jambScore: score,
+    jambAttempts: character.jambAttempts + 1,
+    log: [...character.log, `Age ${character.age}: ${resultLine}`],
+  };
+}
+
+// Refuses (rather than throws) the same way every other gated mutator
+// here does: already enrolled/graduated, no JAMB score on file, a score
+// below this institution's minJambScore, or a wealth tier that can't
+// reach it. No upfront payment — tuition is applied yearly in ageUp,
+// same pattern as schoolId/secondarySchoolId.
+export function enrollInUniversity(character: LifeCharacter, uni: University): LifeCharacter {
+  if (
+    character.universityId ||
+    character.hasDegree ||
+    character.jambScore == null ||
+    !universitiesAvailableTo(character.wealthTier, character.jambScore).some((u) => u.id === uni.id)
+  ) {
+    return character;
+  }
+  return {
+    ...character,
+    universityId: uni.id,
+    universityYear: 0,
+    log: [...character.log, `Age ${character.age}: Admitted to ${uni.name}.`],
+  };
+}
+
+// ASUU strikes are a real, famously disruptive feature of Nigerian public
+// university life — a strike year still costs that year's tuition (fees
+// don't pause just because lectures do) but grants no smarts and doesn't
+// count toward graduation, stalling it rather than ending the program.
+export const ASUU_STRIKE_CHANCE = 0.12;
+
+interface UniversityProgress {
+  universityYear: number;
+  hasDegree: boolean;
+  delta: StatDelta;
+  log: string[];
+}
+
+function rollUniversityProgress(character: LifeCharacter, nextAge: number): UniversityProgress {
+  if (!character.universityId || character.hasDegree) {
+    return { universityYear: character.universityYear, hasDegree: character.hasDegree, delta: {}, log: [] };
+  }
+  const uni = UNIVERSITIES.find((u) => u.id === character.universityId);
+  if (!uni) {
+    return { universityYear: character.universityYear, hasDegree: character.hasDegree, delta: {}, log: [] };
+  }
+  if (Math.random() < ASUU_STRIKE_CHANCE) {
+    return {
+      universityYear: character.universityYear,
+      hasDegree: false,
+      delta: { naira: -uni.costPerYear, happiness: -1 },
+      log: [`Age ${nextAge}: ASUU declares another strike — the semester is lost, but the fees are still due.`],
+    };
+  }
+  const universityYear = character.universityYear + 1;
+  const hasDegree = universityYear >= uni.durationYears;
+  return {
+    universityYear,
+    hasDegree,
+    delta: { naira: -uni.costPerYear, smarts: uni.smartsPerYear, happiness: uni.happinessPerYear },
+    log: hasDegree ? [`Age ${nextAge}: Graduated from ${uni.name} with a degree.`] : [],
   };
 }
 
@@ -623,6 +779,17 @@ export function ageUp(character: LifeCharacter): LifeCharacter {
     school && nextAge <= AGE_SCHOOL_CHOICE_CUTOFF
       ? { naira: -school.costPerYear, smarts: school.smartsPerYear, happiness: school.happinessPerYear }
       : {};
+  // Same pattern, one age window later — secondarySchoolId is a separate
+  // field from schoolId, same "set once, never un-set, inert past the
+  // window" lifecycle.
+  const secondarySchool = character.secondarySchoolId
+    ? SECONDARY_SCHOOLS.find((s) => s.id === character.secondarySchoolId)
+    : undefined;
+  const secondaryDelta =
+    secondarySchool && nextAge >= SECONDARY_SCHOOL_START_AGE && nextAge <= SECONDARY_SCHOOL_END_AGE
+      ? { naira: -secondarySchool.costPerYear, smarts: secondarySchool.smartsPerYear, happiness: secondarySchool.happinessPerYear }
+      : {};
+  const universityProgress = rollUniversityProgress(character, nextAge);
   const prevNaira = character.stats.naira;
   const stats = applyDelta(character.stats, {
     health:
@@ -634,11 +801,13 @@ export function ageUp(character: LifeCharacter): LifeCharacter {
     happiness:
       randomInt(-1, 1) +
       (schoolDelta.happiness ?? 0) +
+      (secondaryDelta.happiness ?? 0) +
+      (universityProgress.delta.happiness ?? 0) +
       passive.happiness +
       birthday.happiness +
       unemploymentStrain(character),
-    naira: income + (schoolDelta.naira ?? 0),
-    smarts: (schoolDelta.smarts ?? 0) + passive.smarts,
+    naira: income + (schoolDelta.naira ?? 0) + (secondaryDelta.naira ?? 0) + (universityProgress.delta.naira ?? 0),
+    smarts: (schoolDelta.smarts ?? 0) + (secondaryDelta.smarts ?? 0) + (universityProgress.delta.smarts ?? 0) + passive.smarts,
   });
   // Savings/loan interest compound as a side ledger, same as
   // pensionSavings above — they don't touch stats.naira/income, so they
@@ -678,6 +847,8 @@ export function ageUp(character: LifeCharacter): LifeCharacter {
     jobLevel: career.jobLevel,
     yearsInJob: career.yearsInJob,
     unemployedStreak: career.unemployedStreak,
+    universityYear: universityProgress.universityYear,
+    hasDegree: universityProgress.hasDegree,
     streak: nextStreak(character.streak, stats.health),
     earnedThisYear: income > 0 ? income : 0,
     spentThisYear,
@@ -685,7 +856,7 @@ export function ageUp(character: LifeCharacter): LifeCharacter {
     prayersThisYear: 0,
     ateThisYear: false,
     classroomTalksThisYear: 0,
-    log: [...character.log, ...birthday.log, ...passive.log, ...businessLog, ...career.log],
+    log: [...character.log, ...birthday.log, ...passive.log, ...businessLog, ...career.log, ...universityProgress.log],
   };
   // One-time flavor line the year the pension pot actually empties, not
   // every year after — real pension-delay/exhaustion precarity, not spam.
@@ -1413,7 +1584,7 @@ export function formatObituaryText(character: LifeCharacter): string {
 // number itself isn't branched on anywhere, it's just there for the day a
 // real structural migration (not just "fill in a missing field") is
 // needed and something has to tell saves apart.
-export const SAVE_VERSION = 4;
+export const SAVE_VERSION = 5;
 
 export interface SaveFile {
   version: number;
@@ -1449,6 +1620,12 @@ const CHARACTER_FIELD_DEFAULTS = {
   yearsInJob: 0,
   unemployedStreak: 0,
   businessCapital: 0,
+  secondarySchoolId: null as string | null,
+  jambScore: null as number | null,
+  jambAttempts: 0,
+  universityId: null as string | null,
+  universityYear: 0,
+  hasDegree: false,
 };
 
 // Takes whatever was actually in storage — a bare old-shape character

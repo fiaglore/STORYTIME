@@ -178,6 +178,40 @@ the single surviving mode, `src/ui/LifeSim.tsx`.
   silently zeroed out ages 3-10's gameplay entirely (just the school
   pick, then years of clicking "Age up" with nothing else to do) — a real
   bug, don't reintroduce that gate.**
+- **Secondary school, JAMB, university, ASUU strikes** — education past
+  age 10, the "Education" tab in `LifeSim.tsx` (shown once age >=
+  `SECONDARY_SCHOOL_START_AGE`). Secondary school is the exact same
+  one-time-choice shape as primary, just a second, separate field:
+  `LifeCharacter.secondarySchoolId` (`chooseSecondarySchool`,
+  `src/content/schools.ts`'s `SECONDARY_SCHOOLS`/
+  `secondarySchoolsAvailableTo`), blocking Age Up for ages
+  `SECONDARY_SCHOOL_START_AGE`-`SECONDARY_SCHOOL_END_AGE` (11-17) the one
+  year it's unset, same as primary's blocking screen — never cleared, so
+  its cost/smarts/happiness keeps applying every year through 17 then
+  goes inert, exactly like `schoolId` does through 10.
+  `takeJAMB` (real JAMB/UTME scores run 0-400) needs a secondary school
+  on record and `JAMB_MIN_AGE` (17); the score is `smarts`-scaled plus a
+  quality bonus from the secondary school attended (a better school means
+  better prep — same "investment pays off" direction as everything else
+  here) and costs `JAMB_REGISTRATION_FEE` every attempt. No cap on
+  retakes — `jambAttempts` just counts them. `JAMB_UNIVERSITY_CUTOFF`
+  (200) and the lower `JAMB_POLY_CUTOFF` (140) are what
+  `universitiesAvailableTo(wealthTier, jambScore)` in `content/
+  schools.ts` checks alongside the usual wealth-tier gate — money alone
+  doesn't buy admission. `enrollInUniversity` sets `universityId` with no
+  upfront payment, same "tuition applied yearly in `ageUp`, not a lump
+  sum" pattern as school fees. `rollUniversityProgress` (called from
+  `ageUp`, same "silent roll, log records the outcome" shape as
+  `rollCareerChanges`) is where **ASUU strikes** live:
+  `ASUU_STRIKE_CHANCE` (12%/yr) while enrolled stalls that year — no
+  smarts gained, `universityYear` doesn't advance — but tuition is still
+  charged (fees don't pause just because lectures do, same as the real
+  thing), logged as `"ASUU declares another strike..."`. A non-strike
+  year applies the usual cost/smarts/happiness and advances
+  `universityYear`; reaching the institution's `durationYears` sets
+  `LifeCharacter.hasDegree` and logs a graduation line — `universityId`
+  stays set afterward, inert, same lifecycle as `schoolId`/
+  `secondarySchoolId`.
 - Every year (past the infant band, ages 0-2) rolls chores and life
   events via `rollYearWork(character)` in `lifeSim.ts` — one entry point
   used by both the initial `loadSaved` state and `handleAgeUp`, so they

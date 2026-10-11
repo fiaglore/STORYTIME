@@ -1,9 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
   AGE_UP_REQUIREMENTS,
+  ASUU_STRIKE_CHANCE,
   BUSINESS_CLOSE_RATE,
   FIRING_CHANCE,
   INFLATION_RATE,
+  JAMB_MIN_AGE,
+  JAMB_POLY_CUTOFF,
+  JAMB_REGISTRATION_FEE,
+  JAMB_UNIVERSITY_CUTOFF,
   JOB_LEVEL_PAY_BONUS,
   LOAN_INTEREST_RATE,
   MAX_HUSTLES_PER_YEAR,
@@ -12,12 +17,16 @@ import {
   MIN_BUSINESS_CAPITAL,
   PROMOTION_MIN_YEARS_IN_JOB,
   SAVINGS_INTEREST_RATE,
+  SECONDARY_SCHOOL_END_AGE,
+  SECONDARY_SCHOOL_START_AGE,
   SELL_RATE,
   ageUp,
   availableJobs,
   buyItem,
+  chooseSecondarySchool,
   closeBusiness,
   depositToSavings,
+  enrollInUniversity,
   hustle,
   jobTitleFor,
   pickEvents,
@@ -26,11 +35,13 @@ import {
   resolveEvent,
   sellItem,
   startBusiness,
+  takeJAMB,
   takeJob,
   takeLoan,
   withdrawFromSavings,
   type LifeCharacter,
 } from "../src/engine/lifeSim";
+import { SECONDARY_SCHOOLS, UNIVERSITIES } from "../src/content/schools";
 import { bandForAge } from "../src/content/lifeEvents";
 import {
   birthdayEffects,
@@ -83,6 +94,12 @@ function baseCharacter(overrides: Partial<LifeCharacter> = {}): LifeCharacter {
     yearsInJob: 0,
     unemployedStreak: 0,
     businessCapital: 0,
+    secondarySchoolId: null,
+    jambScore: null,
+    jambAttempts: 0,
+    universityId: null,
+    universityYear: 0,
+    hasDegree: false,
     ...overrides,
   };
 }
@@ -645,5 +662,229 @@ describe("careers: promotion, firing, unemployment, entrepreneurship", () => {
       expect(incomes.size).toBeGreaterThan(1); // genuinely different outcomes, not a fixed payout
       expect(sawLoss).toBe(true);
     });
+  });
+});
+
+describe("education: secondary school, JAMB, university, ASUU", () => {
+  describe("secondary school", () => {
+    it("refuses a secondary school above the character's wealth tier", () => {
+      const poor = baseCharacter({ age: 11, wealthTier: "shepeteri" });
+      const eliteSchool = SECONDARY_SCHOOLS.find((s) => s.id === "elite-secondary-academy")!;
+      expect(chooseSecondarySchool(poor, eliteSchool).secondarySchoolId).toBeNull();
+    });
+
+    it("enrolls in a reachable secondary school", () => {
+      const c = baseCharacter({ age: 11, wealthTier: "middle-class" });
+      const school = SECONDARY_SCHOOLS.find((s) => s.id === "community-secondary")!;
+      expect(chooseSecondarySchool(c, school).secondarySchoolId).toBe("community-secondary");
+    });
+
+    it("applies cost/smarts/happiness only within the secondary-school age window", () => {
+      const school = SECONDARY_SCHOOLS.find((s) => s.id === "community-secondary")!;
+      const inWindow = baseCharacter({
+        age: SECONDARY_SCHOOL_START_AGE - 1,
+        secondarySchoolId: school.id,
+        job: "none",
+        stats: { happiness: 50, health: 80, smarts: 50, looks: 50, naira: 1_000_000 },
+      });
+      const next = ageUp(inWindow);
+      expect(next.stats.naira).toBe(1_000_000 - school.costPerYear);
+
+      const outOfWindow = baseCharacter({
+        age: SECONDARY_SCHOOL_END_AGE,
+        secondarySchoolId: school.id,
+        job: "none",
+        stats: { happiness: 50, health: 80, smarts: 50, looks: 50, naira: 1_000_000 },
+      });
+      const nextOut = ageUp(outOfWindow);
+      expect(nextOut.stats.naira).toBe(1_000_000); // past SECONDARY_SCHOOL_END_AGE, inert
+    });
+  });
+
+  describe("JAMB", () => {
+    it("refuses before JAMB_MIN_AGE, without a secondary school, or unaffordable", () => {
+      const tooYoung = baseCharacter({ age: JAMB_MIN_AGE - 1, secondarySchoolId: "community-secondary" });
+      expect(takeJAMB(tooYoung).jambScore).toBeNull();
+
+      const noSecondary = baseCharacter({ age: JAMB_MIN_AGE, secondarySchoolId: null });
+      expect(takeJAMB(noSecondary).jambScore).toBeNull();
+
+      const poor = baseCharacter({
+        age: JAMB_MIN_AGE,
+        secondarySchoolId: "community-secondary",
+        stats: withNaira(JAMB_REGISTRATION_FEE - 1),
+      });
+      expect(takeJAMB(poor).jambScore).toBeNull();
+    });
+
+    it("refuses once already enrolled or graduated", () => {
+      const enrolled = baseCharacter({
+        age: JAMB_MIN_AGE,
+        secondarySchoolId: "community-secondary",
+        universityId: "polytechnic",
+        stats: withNaira(1_000_000),
+      });
+      expect(takeJAMB(enrolled).jambScore).toBeNull();
+
+      const graduated = baseCharacter({
+        age: JAMB_MIN_AGE,
+        secondarySchoolId: "community-secondary",
+        hasDegree: true,
+        stats: withNaira(1_000_000),
+      });
+      expect(takeJAMB(graduated).jambScore).toBeNull();
+    });
+
+    it("deducts the registration fee, counts it as spent, and bumps jambAttempts", () => {
+      const c = baseCharacter({
+        age: JAMB_MIN_AGE,
+        secondarySchoolId: "community-secondary",
+        stats: withNaira(1_000_000),
+        spentThisYear: 0,
+      });
+      const next = takeJAMB(c);
+      expect(next.stats.naira).toBe(1_000_000 - JAMB_REGISTRATION_FEE);
+      expect(next.spentThisYear).toBe(JAMB_REGISTRATION_FEE);
+      expect(next.jambAttempts).toBe(1);
+      expect(next.jambScore).toBeGreaterThanOrEqual(0);
+      expect(next.jambScore).toBeLessThanOrEqual(400);
+    });
+
+    it("a better secondary school and higher smarts produce a meaningfully higher floor score", () => {
+      const weak = baseCharacter({
+        age: JAMB_MIN_AGE,
+        secondarySchoolId: "community-secondary", // smartsPerYear 3
+        stats: { happiness: 50, health: 80, smarts: 0, looks: 50, naira: 1_000_000 },
+      });
+      const strong = baseCharacter({
+        age: JAMB_MIN_AGE,
+        secondarySchoolId: "boarding-abroad-secondary", // smartsPerYear 16
+        stats: { happiness: 50, health: 80, smarts: 100, looks: 50, naira: 1_000_000 },
+      });
+      // weak's ceiling (randomInt maxes at 160, no smarts, low quality bonus)
+      // is below strong's floor (randomInt mins at 80, full smarts, high
+      // quality bonus) — this holds for every possible roll, not just on
+      // average.
+      const weakCeiling = 160 + 0 + 3 * 8;
+      const strongFloor = 80 + Math.round(100 * 1.8) + 16 * 8;
+      expect(weakCeiling).toBeLessThan(strongFloor);
+      for (let trial = 0; trial < 20; trial++) {
+        expect(takeJAMB(weak).jambScore!).toBeLessThanOrEqual(weakCeiling);
+        expect(takeJAMB(strong).jambScore!).toBeGreaterThanOrEqual(strongFloor);
+      }
+    });
+  });
+
+  describe("university enrollment", () => {
+    it("refuses without a JAMB score, below minJambScore, or above the character's wealth tier", () => {
+      const poly = UNIVERSITIES.find((u) => u.id === "polytechnic")!;
+      const eliteUni = UNIVERSITIES.find((u) => u.id === "elite-private-university")!;
+
+      const noScore = baseCharacter({ jambScore: null });
+      expect(enrollInUniversity(noScore, poly).universityId).toBeNull();
+
+      const lowScore = baseCharacter({ jambScore: poly.minJambScore - 1 });
+      expect(enrollInUniversity(lowScore, poly).universityId).toBeNull();
+
+      const poorButQualified = baseCharacter({ jambScore: eliteUni.minJambScore, wealthTier: "shepeteri" });
+      expect(enrollInUniversity(poorButQualified, eliteUni).universityId).toBeNull();
+    });
+
+    it("refuses re-enrolling while already enrolled or already graduated", () => {
+      const poly = UNIVERSITIES.find((u) => u.id === "polytechnic")!;
+      const alreadyEnrolled = baseCharacter({ jambScore: 300, universityId: "federal-university" });
+      expect(enrollInUniversity(alreadyEnrolled, poly).universityId).toBe("federal-university");
+
+      const graduated = baseCharacter({ jambScore: 300, hasDegree: true });
+      expect(enrollInUniversity(graduated, poly).universityId).toBeNull();
+    });
+
+    it("enrolls a qualified character, starting at universityYear 0", () => {
+      const poly = UNIVERSITIES.find((u) => u.id === "polytechnic")!;
+      const c = baseCharacter({ jambScore: poly.minJambScore, wealthTier: "shepeteri" });
+      const next = enrollInUniversity(c, poly);
+      expect(next.universityId).toBe("polytechnic");
+      expect(next.universityYear).toBe(0);
+    });
+  });
+
+  describe("university progress and ASUU strikes", () => {
+    it("ageUp applies tuition/smarts and advances universityYear by 1 on a non-strike year", () => {
+      const uni = UNIVERSITIES.find((u) => u.id === "federal-university")!;
+      for (let trial = 0; trial < 50; trial++) {
+        const c = baseCharacter({
+          age: 18,
+          job: "none",
+          universityId: uni.id,
+          universityYear: 0,
+          stats: { happiness: 50, health: 80, smarts: 50, looks: 50, naira: 10_000_000 },
+        });
+        const next = ageUp(c);
+        // Either normal progress (year advances, tuition deducted) or an
+        // ASUU strike (year stalls, tuition still deducted) — both deduct
+        // the same tuition either way.
+        expect(next.stats.naira).toBeLessThanOrEqual(10_000_000 - uni.costPerYear);
+        expect(next.universityYear).toBeGreaterThanOrEqual(0);
+        expect(next.universityYear).toBeLessThanOrEqual(1);
+      }
+    });
+
+    it("graduates (hasDegree) exactly at durationYears of real progress, never early", () => {
+      const uni = UNIVERSITIES.find((u) => u.id === "polytechnic")!; // durationYears: 3
+      let c = baseCharacter({
+        age: 18,
+        job: "none",
+        universityId: uni.id,
+        universityYear: 0,
+        stats: { happiness: 50, health: 80, smarts: 50, looks: 50, naira: 50_000_000 },
+      });
+      // Age up enough times to guarantee durationYears of non-strike
+      // progress even if a strike or two happens along the way.
+      for (let i = 0; i < uni.durationYears * 6 && !c.hasDegree; i++) {
+        c = ageUp(c);
+      }
+      expect(c.hasDegree).toBe(true);
+      expect(c.universityYear).toBeGreaterThanOrEqual(uni.durationYears);
+    });
+
+    it("over many trials, an ASUU strike both does and doesn't happen", () => {
+      let struck = 0;
+      let clear = 0;
+      for (let trial = 0; trial < 200; trial++) {
+        const c = baseCharacter({
+          age: 18,
+          job: "none",
+          universityId: "federal-university",
+          universityYear: 0,
+          stats: withNaira(10_000_000),
+        });
+        if (ageUp(c).universityYear === 0) struck++;
+        else clear++;
+      }
+      expect(struck).toBeGreaterThan(0);
+      expect(clear).toBeGreaterThan(0);
+      expect(ASUU_STRIKE_CHANCE).toBeLessThan(0.5);
+    });
+
+    it("a university with no active enrollment (or an already-graduated character) is untouched by ageUp", () => {
+      const none = baseCharacter({ age: 20, universityId: null, job: "none", stats: withNaira(0) });
+      expect(ageUp(none).universityYear).toBe(0);
+
+      const graduated = baseCharacter({
+        age: 25,
+        universityId: "polytechnic",
+        universityYear: 3,
+        hasDegree: true,
+        job: "none",
+        stats: withNaira(1_000_000),
+      });
+      const next = ageUp(graduated);
+      expect(next.stats.naira).toBe(1_000_000); // no further tuition once graduated
+      expect(next.hasDegree).toBe(true);
+    });
+  });
+
+  it("JAMB_POLY_CUTOFF is below JAMB_UNIVERSITY_CUTOFF", () => {
+    expect(JAMB_POLY_CUTOFF).toBeLessThan(JAMB_UNIVERSITY_CUTOFF);
   });
 });

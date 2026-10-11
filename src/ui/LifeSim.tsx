@@ -7,9 +7,11 @@ import {
   buyItem,
   changeFaith,
   chooseSchool,
+  chooseSecondarySchool,
   closeBusiness,
   createCharacter,
   depositToSavings,
+  enrollInUniversity,
   hustle,
   isChoiceAvailable,
   jobTitleFor,
@@ -30,6 +32,7 @@ import {
   startBusiness,
   summarizeLife,
   formatObituaryText,
+  takeJAMB,
   takeJob,
   takeLoan,
   talkToClassroomNPC,
@@ -39,9 +42,14 @@ import {
   trainSkill,
   AGE_SCHOOL_CHOICE_CUTOFF,
   AGE_UP_REQUIREMENTS,
+  ASUU_STRIKE_CHANCE,
   BUSINESS_CLOSE_RATE,
   CRITICAL_HEALTH_THRESHOLD,
   INFLATION_RATE,
+  JAMB_MIN_AGE,
+  JAMB_POLY_CUTOFF,
+  JAMB_REGISTRATION_FEE,
+  JAMB_UNIVERSITY_CUTOFF,
   JOBS,
   LOAN_INTEREST_RATE,
   MAX_CLASSROOM_TALKS_PER_YEAR,
@@ -53,6 +61,8 @@ import {
   REVIVE_COST,
   SAVE_VERSION,
   SAVINGS_INTEREST_RATE,
+  SECONDARY_SCHOOL_END_AGE,
+  SECONDARY_SCHOOL_START_AGE,
   TREATMENT_COST,
   type LifeCharacter,
   type JobId,
@@ -62,7 +72,13 @@ import type { LifeEvent } from "../content/lifeEvents";
 import type { Chore, ChoreGameVariant } from "../content/chores";
 import { SHOP_CATEGORIES, SHOP_ITEMS, type ShopCategory, type ShopItem } from "../content/shop";
 import { SKILLS, SKILL_TRAIN_COST, type Skill } from "../content/skills";
-import { schoolsAvailableTo, type School } from "../content/schools";
+import {
+  schoolsAvailableTo,
+  secondarySchoolsAvailableTo,
+  universitiesAvailableTo,
+  type School,
+  type University,
+} from "../content/schools";
 import { CLASSROOM_NPCS, type ClassroomNPC } from "../content/classroom";
 import {
   FAITHS,
@@ -226,6 +242,7 @@ export function LifeSim({ onExit }: Props) {
   const [showSkills, setShowSkills] = useState(false);
   const [showBank, setShowBank] = useState(false);
   const [bankAmount, setBankAmount] = useState("");
+  const [showEducation, setShowEducation] = useState(false);
   const [showMarriage, setShowMarriage] = useState(false);
   const [showClassroom, setShowClassroom] = useState(false);
   const [classroomMessage, setClassroomMessage] = useState<string | null>(null);
@@ -435,6 +452,9 @@ export function LifeSim({ onExit }: Props) {
       pendingJob ||
       pendingChores.length > 0 ||
       (character.age <= AGE_SCHOOL_CHOICE_CUTOFF && !character.schoolId) ||
+      (character.age >= SECONDARY_SCHOOL_START_AGE &&
+        character.age <= SECONDARY_SCHOOL_END_AGE &&
+        !character.secondarySchoolId) ||
       !meetsAgeUpRequirements(character)
     )
       return;
@@ -463,6 +483,26 @@ export function LifeSim({ onExit }: Props) {
   const handleChooseSchool = (school: School) => {
     if (!character) return;
     setCharacter(chooseSchool(character, school));
+  };
+
+  const handleChooseSecondarySchool = (school: School) => {
+    if (!character) return;
+    setCharacter(chooseSecondarySchool(character, school));
+  };
+
+  const [jambMessage, setJambMessage] = useState<string | null>(null);
+  const handleTakeJAMB = () => {
+    if (!character) return;
+    const next = takeJAMB(character);
+    setCharacter(next);
+    if (next.jambAttempts !== character.jambAttempts) {
+      setJambMessage(next.log[next.log.length - 1]);
+    }
+  };
+
+  const handleEnrollInUniversity = (uni: University) => {
+    if (!character) return;
+    setCharacter(enrollInUniversity(character, uni));
   };
 
   const handleJobPick = (job: JobId) => {
@@ -511,6 +551,8 @@ export function LifeSim({ onExit }: Props) {
     setShowSkills(false);
     setShowBank(false);
     setBankAmount("");
+    setShowEducation(false);
+    setJambMessage(null);
     setShowMarriage(false);
     setShowSettings(false);
     setShowClassroom(false);
@@ -848,6 +890,7 @@ export function LifeSim({ onExit }: Props) {
               setShowShop(false);
               setShowSkills(false);
               setShowBank(false);
+              setShowEducation(false);
               setShowMarriage(false);
               setShowSettings(false);
               setShowClassroom(false);
@@ -863,6 +906,7 @@ export function LifeSim({ onExit }: Props) {
             setShowJobs(false);
             setShowSkills(false);
             setShowBank(false);
+            setShowEducation(false);
             setShowMarriage(false);
             setShowSettings(false);
             setShowClassroom(false);
@@ -877,6 +921,7 @@ export function LifeSim({ onExit }: Props) {
             setShowJobs(false);
             setShowShop(false);
             setShowBank(false);
+            setShowEducation(false);
             setShowMarriage(false);
             setShowSettings(false);
             setShowClassroom(false);
@@ -893,12 +938,31 @@ export function LifeSim({ onExit }: Props) {
               setShowJobs(false);
               setShowShop(false);
               setShowSkills(false);
+              setShowEducation(false);
               setShowMarriage(false);
               setShowSettings(false);
               setShowClassroom(false);
             }}
           >
             Bank
+          </button>
+        )}
+        {character.age >= SECONDARY_SCHOOL_START_AGE && (
+          <button
+            className={`lifesim-tab ${showEducation ? "lifesim-tab--active" : ""}`}
+            onClick={() => {
+              setShowEducation((s) => !s);
+              setJambMessage(null);
+              setShowJobs(false);
+              setShowShop(false);
+              setShowSkills(false);
+              setShowBank(false);
+              setShowMarriage(false);
+              setShowSettings(false);
+              setShowClassroom(false);
+            }}
+          >
+            Education
           </button>
         )}
         {character.schoolId && character.age >= CLASSROOM_MIN_AGE && character.age <= CLASSROOM_MAX_AGE && (
@@ -910,6 +974,7 @@ export function LifeSim({ onExit }: Props) {
               setShowShop(false);
               setShowSkills(false);
               setShowBank(false);
+              setShowEducation(false);
               setShowMarriage(false);
               setShowSettings(false);
             }}
@@ -926,6 +991,7 @@ export function LifeSim({ onExit }: Props) {
               setShowShop(false);
               setShowSkills(false);
               setShowBank(false);
+              setShowEducation(false);
               setShowSettings(false);
               setShowClassroom(false);
             }}
@@ -941,6 +1007,7 @@ export function LifeSim({ onExit }: Props) {
             setShowShop(false);
             setShowSkills(false);
             setShowBank(false);
+            setShowEducation(false);
             setShowMarriage(false);
             setShowClassroom(false);
           }}
@@ -1176,6 +1243,68 @@ export function LifeSim({ onExit }: Props) {
         </div>
       )}
 
+      {showEducation && (
+        <div className="lifesim-bank">
+          {character.secondarySchoolId && (
+            <p className="lifesim-hint">
+              Attending{" "}
+              {secondarySchoolsAvailableTo(character.wealthTier).find((s) => s.id === character.secondarySchoolId)
+                ?.name ?? "secondary school"}
+              .
+            </p>
+          )}
+          {character.hasDegree ? (
+            <p className="lifesim-hint">
+              Graduated with a degree
+              {character.universityId
+                ? ` from ${universitiesAvailableTo(character.wealthTier, character.jambScore ?? 0).find((u) => u.id === character.universityId)?.name ?? "university"}`
+                : ""}
+              .
+            </p>
+          ) : character.universityId ? (
+            <div className="lifesim-bank__row">
+              <span>
+                {universitiesAvailableTo(character.wealthTier, character.jambScore ?? 0).find(
+                  (u) => u.id === character.universityId,
+                )?.name ?? "University"}
+              </span>
+              <span className="lifesim-bank__value">Year {character.universityYear}</span>
+            </div>
+          ) : character.age >= JAMB_MIN_AGE ? (
+            <>
+              <p className="lifesim-hint">
+                JAMB scores run 0-400 — {JAMB_UNIVERSITY_CUTOFF}+ reaches university, {JAMB_POLY_CUTOFF}+ reaches
+                polytechnic. ASUU strikes ({Math.round(ASUU_STRIKE_CHANCE * 100)}% chance each year) can stall a
+                semester once enrolled, though fees are still due.
+              </p>
+              {character.jambScore != null && (
+                <div className="lifesim-bank__row">
+                  <span>Last JAMB score</span>
+                  <span className="lifesim-bank__value">{character.jambScore}/400</span>
+                </div>
+              )}
+              <button
+                className="rpg-choice-pill"
+                onClick={handleTakeJAMB}
+                disabled={!character.secondarySchoolId || character.stats.naira < JAMB_REGISTRATION_FEE}
+              >
+                {character.jambScore != null ? "Retake JAMB" : "Take JAMB"} — ₦
+                {JAMB_REGISTRATION_FEE.toLocaleString()}
+              </button>
+              {jambMessage && <p className="lifesim-prayer__message">{jambMessage}</p>}
+              {character.jambScore != null &&
+                universitiesAvailableTo(character.wealthTier, character.jambScore).map((uni) => (
+                  <button key={uni.id} className="rpg-choice-pill" onClick={() => handleEnrollInUniversity(uni)}>
+                    {uni.name} — ₦{uni.costPerYear.toLocaleString()}/yr, {uni.durationYears} years
+                  </button>
+                ))}
+            </>
+          ) : (
+            <p className="lifesim-hint">JAMB opens up at age {JAMB_MIN_AGE}.</p>
+          )}
+        </div>
+      )}
+
       {showMarriage && uid && (
         <LifeSimSocial
           character={character}
@@ -1242,6 +1371,21 @@ export function LifeSim({ onExit }: Props) {
           </p>
           {schoolsAvailableTo(character.wealthTier).map((school) => (
             <button key={school.id} className="rpg-choice-pill" onClick={() => handleChooseSchool(school)}>
+              {school.name}
+              {school.costPerYear > 0 ? ` — ₦${school.costPerYear.toLocaleString()}/yr` : " — free"}
+            </button>
+          ))}
+        </div>
+      ) : character.age >= SECONDARY_SCHOOL_START_AGE &&
+        character.age <= SECONDARY_SCHOOL_END_AGE &&
+        !character.secondarySchoolId ? (
+        <div className="lifesim-school">
+          <p className="lifesim-chore__counter">Choose a secondary school</p>
+          <p className="lifesim-hint">
+            Which secondary school {character.name} attends depends on what the family can afford.
+          </p>
+          {secondarySchoolsAvailableTo(character.wealthTier).map((school) => (
+            <button key={school.id} className="rpg-choice-pill" onClick={() => handleChooseSecondarySchool(school)}>
               {school.name}
               {school.costPerYear > 0 ? ` — ₦${school.costPerYear.toLocaleString()}/yr` : " — free"}
             </button>

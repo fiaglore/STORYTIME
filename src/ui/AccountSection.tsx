@@ -4,9 +4,8 @@ import { useAuthStore } from "../engine/authStore";
 type Mode = "signin" | "signup";
 
 // Shared account widget: a sign-in/sign-up form when signed out, or a
-// status + sign-out button when signed in. Used in Settings (story mode)
-// and in LifeSim's screen, since both modes' saves sync through the same
-// Firebase account once signed in (see store.ts / LifeSim.tsx).
+// status + sign-out button when signed in. Embedded in Lagos Life's intro
+// and Settings screens (see authStore.ts / LifeSim.tsx).
 export function AccountSection() {
   const { enabled, status, user, error, busy, init, signIn, signUp, signOut, clearError } =
     useAuthStore();

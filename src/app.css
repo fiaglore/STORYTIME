@@ -1,13 +1,3 @@
-.app-loading {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 100vh;
-  font-family: var(--font-serif);
-  font-size: 1.25rem;
-  color: var(--text-muted);
-}
-
 /* ---------- shared ---------- */
 
 .choice-button {
@@ -37,16 +27,6 @@
   background: var(--chapter-accent, var(--accent));
   border-color: var(--chapter-accent, var(--accent));
   color: #fff;
-}
-
-.choice-button--ghost {
-  background: transparent;
-}
-
-.choice-button--call-response {
-  align-self: center;
-  text-align: center;
-  font-size: 1.1rem;
 }
 
 .choice-button--scene {
@@ -89,11 +69,6 @@
   font-size: 1.1rem;
 }
 
-.title-screen__companion {
-  color: var(--text-muted);
-  font-size: 0.9rem;
-}
-
 .title-screen__modes {
   display: flex;
   flex-direction: column;
@@ -116,150 +91,6 @@
   border: 1px solid var(--border);
   border-radius: 1rem;
   padding: 1.75rem;
-}
-
-/* ---------- map hub ---------- */
-
-.map-hub {
-  max-width: 72rem;
-  margin: 0 auto;
-  padding: 2rem 1.5rem 4rem;
-}
-
-.map-hub__header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 1rem;
-  flex-wrap: wrap;
-  margin-bottom: 2rem;
-}
-
-.map-hub__subtitle {
-  color: var(--text-muted);
-  margin-top: 0.4rem;
-}
-
-.map-hub__actions {
-  display: flex;
-  gap: 0.75rem;
-}
-
-.map-hub__progress {
-  background: var(--bg-elevated);
-  border: 1px solid var(--border);
-  border-radius: 0.85rem;
-  padding: 0.85rem 1rem;
-  margin-bottom: 1.5rem;
-}
-
-.map-hub__progress-row {
-  display: flex;
-  justify-content: space-between;
-  gap: 1rem;
-  flex-wrap: wrap;
-  font-size: 0.8rem;
-  font-weight: 700;
-  color: var(--text-muted);
-  margin-bottom: 0.4rem;
-}
-
-.map-hub__grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
-  gap: 1.25rem;
-}
-
-/* ---------- chapter card ---------- */
-
-.chapter-card {
-  border: 2px solid var(--chapter-accent, var(--border));
-  border-radius: 1rem;
-  padding: 1.25rem;
-  background: var(--bg-elevated);
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-}
-
-.chapter-card__number {
-  color: var(--chapter-accent, var(--accent));
-  font-weight: 800;
-  font-size: 0.8rem;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-.chapter-card__protagonist {
-  color: var(--text-muted);
-  font-size: 0.9rem;
-}
-
-.chapter-card__note {
-  font-size: 0.85rem;
-  color: var(--text-muted);
-  font-style: italic;
-}
-
-.chapter-card__endings {
-  font-size: 0.85rem;
-  margin-top: 0.25rem;
-}
-
-.progress-bar {
-  margin: 0.4rem 0 0.7rem;
-}
-
-.chapter-card--locked {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 12rem;
-  border-style: dashed;
-  color: var(--text-muted);
-}
-
-.chapter-card__silhouette {
-  width: 3rem;
-  height: 3rem;
-  border-radius: 50%;
-  background: var(--border);
-  margin-bottom: 0.5rem;
-}
-
-.chapter-card__locked-label {
-  font-family: var(--font-serif);
-  font-style: italic;
-}
-
-/* ---------- storytime opening ---------- */
-
-.storytime-opening {
-  min-height: 100vh;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 1.25rem;
-  text-align: center;
-  padding: 2rem;
-}
-
-.storytime-opening__eyebrow {
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  font-size: 0.8rem;
-}
-
-.storytime-opening__protagonist {
-  color: var(--text-muted);
-  font-style: italic;
-}
-
-.storytime-opening__call {
-  font-family: var(--font-serif);
-  font-size: 2rem;
 }
 
 /* ---------- story screen ---------- */
@@ -285,12 +116,6 @@
   color: var(--chapter-accent, var(--text));
 }
 
-.story-screen__paragraph {
-  font-family: var(--font-serif);
-  font-size: 1.05rem;
-  line-height: 1.5;
-}
-
 .story-screen__choices {
   display: flex;
   flex-direction: column;
@@ -298,39 +123,9 @@
   padding-top: 0.75rem;
 }
 
-.story-screen--loading,
-.story-screen--error {
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  gap: 1rem;
-}
-
-/* ---------- meter bar ---------- */
-
-.meter-bar {
-  display: flex;
-  gap: 1.25rem;
-  flex-wrap: wrap;
-  background: var(--bg-elevated);
-  border: 1px solid var(--border);
-  border-radius: 0.85rem;
-  padding: 0.85rem 1rem;
-}
-
 .meter {
   flex: 1;
   min-width: 8rem;
-}
-
-.meter__labelRow {
-  display: flex;
-  justify-content: space-between;
-  font-size: 0.75rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--text-muted);
 }
 
 .meter__track {
@@ -427,12 +222,6 @@
   font-size: 1.5rem;
 }
 
-.mini-scene__choices {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
 .mini-scene__change-options {
   display: flex;
   gap: 0.6rem;
@@ -519,114 +308,12 @@
   font-weight: 700;
 }
 
-/* ---------- ending screen ---------- */
-
-.ending-screen {
-  min-height: 100vh;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  gap: 1rem;
-  padding: 2rem;
-}
-
-.ending-screen__badge {
-  color: var(--chapter-accent, var(--accent));
-  font-weight: 700;
-}
-
-.ending-screen__title {
-  font-size: 2rem;
-}
-
-.ending-screen__chapter {
-  color: var(--text-muted);
-}
-
-.ending-screen__verdict {
-  max-width: 32rem;
-  font-size: 1.05rem;
-}
-
-.ending-screen__book-link {
-  color: var(--text-muted);
-  font-style: italic;
-}
-
-.ending-screen__actions {
-  display: flex;
-  gap: 0.75rem;
-  margin-top: 1rem;
-}
-
-/* ---------- endings gallery ---------- */
-
-.endings-gallery {
-  max-width: 56rem;
-  margin: 0 auto;
-  padding: 2rem 1.5rem 4rem;
-}
-
-.endings-gallery__header {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  margin-bottom: 1.5rem;
-}
-
-.endings-gallery__chapter {
-  margin-bottom: 2rem;
-}
-
-.endings-gallery__grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr));
-  gap: 0.75rem;
-  margin-top: 0.75rem;
-}
-
-.ending-card {
-  border: 2px solid var(--border);
-  border-radius: 0.75rem;
-  padding: 1rem;
-  min-height: 5rem;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-}
-
-.ending-card--found {
-  border-color: var(--accent);
-}
-
-.ending-card__hint,
-.endings-gallery__placeholder {
-  color: var(--text-muted);
-  font-style: italic;
-  font-size: 0.9rem;
-}
-
-.ending-card__badge {
-  font-size: 0.8rem;
-  color: var(--accent);
-  margin-top: 0.25rem;
-}
-
 /* ---------- settings ---------- */
 
 .settings-screen {
   max-width: 36rem;
   margin: 0 auto;
   padding: 2rem 1.5rem 4rem;
-}
-
-.settings-screen__header {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  margin-bottom: 1.5rem;
 }
 
 .settings-screen__section {
@@ -644,238 +331,7 @@
   flex-wrap: wrap;
 }
 
-.settings-screen__toggle {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  margin-bottom: 0.6rem;
-}
-
 /* ---------- rpg map ---------- */
-
-.rpg-stage {
-  position: relative;
-  width: 100%;
-  flex: 1;
-  min-height: 22rem;
-  border-radius: 1.25rem;
-  overflow: hidden;
-  border: 3px solid var(--chapter-accent, var(--border));
-  margin-top: 1rem;
-  background: var(--border);
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12);
-  touch-action: none;
-}
-
-.rpg-stage__bg {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.rpg-stage__npc,
-.rpg-stage__player {
-  position: absolute;
-  height: 21%;
-  width: auto;
-  filter: drop-shadow(0 4px 4px rgba(0, 0, 0, 0.3));
-  animation: rpg-bob 2.4s ease-in-out infinite;
-}
-
-.rpg-stage__player {
-  transition: left 0.42s ease, top 0.42s ease;
-  z-index: 2;
-}
-
-.rpg-stage__player--walking {
-  animation: rpg-bob 0.3s ease-in-out infinite;
-}
-
-.rpg-stage__npc {
-  z-index: 1;
-  animation-delay: -1.1s;
-}
-
-.rpg-stage__ambient {
-  position: absolute;
-  height: 16%;
-  width: auto;
-  transform: translate(-50%, -92%);
-  opacity: 0.85;
-  pointer-events: none;
-  filter: drop-shadow(0 3px 3px rgba(0, 0, 0, 0.25));
-  transition: left 3s ease, top 3s ease;
-  animation: rpg-bob 2.8s ease-in-out infinite;
-  z-index: 1;
-}
-
-.rpg-ghost {
-  position: absolute;
-  height: 21%;
-  transform: translate(-50%, -92%);
-  z-index: 1;
-  pointer-events: none;
-  transition: left 0.6s ease, top 0.6s ease;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: flex-end;
-}
-
-.rpg-ghost__label {
-  white-space: nowrap;
-  background: rgba(20, 16, 12, 0.55);
-  color: #fff;
-  font-size: 0.6rem;
-  font-weight: 700;
-  padding: 0.15rem 0.45rem;
-  border-radius: 999px;
-  margin-bottom: 0.3rem;
-}
-
-.rpg-stage__ghost {
-  height: 100%;
-  width: auto;
-  opacity: 0.55;
-  filter: grayscale(0.35) drop-shadow(0 4px 4px rgba(0, 0, 0, 0.3));
-}
-
-@keyframes rpg-bob {
-  0%,
-  100% {
-    transform: translate(-50%, -92%);
-  }
-  50% {
-    transform: translate(-50%, -96%);
-  }
-}
-
-.rpg-hotspot {
-  position: absolute;
-  width: 2.5rem;
-  height: 2.5rem;
-  transform: translate(-50%, -50%);
-  border-radius: 50%;
-  border: none;
-  background: transparent;
-  cursor: pointer;
-  padding: 0;
-  z-index: 3;
-  transition: transform 0.15s ease;
-}
-
-.rpg-hotspot--active:hover,
-.rpg-hotspot--active:focus-visible {
-  transform: translate(-50%, -50%) scale(1.12);
-}
-
-.rpg-hotspot--active:active {
-  transform: translate(-50%, -50%) scale(0.92);
-}
-
-.rpg-hotspot--inactive {
-  opacity: 0;
-  pointer-events: none;
-}
-
-.rpg-hotspot__pulse {
-  display: block;
-  width: 100%;
-  height: 100%;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(255, 221, 128, 0.85), rgba(255, 221, 128, 0));
-  animation: rpg-pulse 1.4s ease-in-out infinite;
-}
-
-@keyframes rpg-pulse {
-  0%,
-  100% {
-    transform: scale(0.7);
-    opacity: 0.6;
-  }
-  50% {
-    transform: scale(1.15);
-    opacity: 1;
-  }
-}
-
-.rpg-hotspot__label {
-  position: absolute;
-  top: -1.9rem;
-  left: 50%;
-  transform: translateX(-50%);
-  white-space: nowrap;
-  background: rgba(20, 16, 12, 0.78);
-  color: #fff;
-  font-size: 0.68rem;
-  font-weight: 700;
-  padding: 0.2rem 0.55rem;
-  border-radius: 999px;
-  pointer-events: none;
-}
-
-.rpg-goal {
-  position: absolute;
-  top: 0.6rem;
-  left: 50%;
-  transform: translateX(-50%);
-  background: rgba(20, 16, 12, 0.72);
-  color: #fff;
-  font-size: 0.8rem;
-  padding: 0.35rem 0.9rem;
-  border-radius: 999px;
-  z-index: 4;
-  pointer-events: none;
-}
-
-.rpg-goal strong {
-  color: #ffd98a;
-}
-
-.rpg-bubble {
-  position: absolute;
-  top: 0.75rem;
-  transform: translateX(-50%);
-  background: #fff;
-  /* Fixed dark text, not var(--text) — this bubble is always white paper
-     regardless of theme, but --text flips to a near-white color in dark
-     mode, which made the text unreadable against the still-white
-     background. This was a real bug, caught on a real device. */
-  color: #241c15;
-  font-family: var(--font-serif);
-  font-size: 0.95rem;
-  line-height: 1.4;
-  padding: 0.6rem 0.85rem;
-  border-radius: 1rem;
-  max-width: min(52%, 18rem);
-  max-height: 38%;
-  overflow-y: auto;
-  width: max-content;
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25);
-  z-index: 5;
-  animation: rpg-bubble-in 0.2s ease-out;
-}
-
-@media (max-width: 480px) {
-  .rpg-bubble {
-    font-size: 0.85rem;
-    line-height: 1.3;
-    padding: 0.5rem 0.7rem;
-  }
-}
-
-.rpg-bubble::after {
-  content: "";
-  position: absolute;
-  left: 50%;
-  bottom: -0.5rem;
-  transform: translateX(-50%);
-  border: 0.5rem solid transparent;
-  border-top-color: #fff;
-  border-bottom: 0;
-}
 
 @keyframes rpg-bubble-in {
   from {
@@ -888,32 +344,6 @@
   }
 }
 
-.rpg-sheet {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 6;
-  background: rgba(15, 12, 9, 0.85);
-  backdrop-filter: blur(3px);
-  padding: 1.1rem 1rem calc(1.1rem + env(safe-area-inset-bottom));
-  max-height: 64%;
-  overflow-y: auto;
-  border-top-left-radius: 1.4rem;
-  border-top-right-radius: 1.4rem;
-  animation: rpg-sheet-in 0.28s cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.rpg-sheet::before {
-  content: "";
-  display: block;
-  width: 2.5rem;
-  height: 0.28rem;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.25);
-  margin: 0 auto 0.85rem;
-}
-
 @keyframes rpg-sheet-in {
   from {
     transform: translateY(16%);
@@ -923,12 +353,6 @@
     transform: translateY(0);
     opacity: 1;
   }
-}
-
-.rpg-sheet__choices {
-  display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
 }
 
 .rpg-choice-pill {
@@ -1103,18 +527,6 @@
   font-size: 0.9rem;
   color: var(--text-muted);
   padding: 0.7rem 0.1rem;
-}
-
-.lifesim-job__button {
-  font-family: var(--font-sans);
-  font-weight: 700;
-  font-size: 0.8rem;
-  border: none;
-  background: var(--accent);
-  color: #fff;
-  padding: 0.4rem 0.8rem;
-  border-radius: 999px;
-  cursor: pointer;
 }
 
 .lifesim-jobs {

@@ -365,7 +365,15 @@ the single surviving mode, `src/ui/LifeSim.tsx`.
   lines), plus a "Copy life story to share" button
   (`navigator.clipboard.writeText(formatObituaryText(character))`) that
   flips to "Copied!" for 2 seconds — `formatObituaryText` is the same
-  summary plus the full log, as plain text.
+  summary plus the full log, as plain text. `LifeCharacter.log` is
+  deliberately left uncapped rather than trimmed to the last N entries —
+  an earlier audit flagged unbounded log growth as a persistence-cost
+  concern, but capping it would silently break "View full life story" /
+  `formatObituaryText` above, which exist specifically to show the
+  *entire* life. A real lifetime's worth of log lines (one per chore/
+  event/age-up, not per keystroke) is a few hundred short strings at
+  most, which is not worth the cloud-save bytes it'd save to lose the
+  genuine endgame feature over.
 - Run `npm test` and `npm run build` before finishing any task.
 
 - `src/ui/Settings.tsx` is one of the tabs in `LifeSim.tsx` (alongside

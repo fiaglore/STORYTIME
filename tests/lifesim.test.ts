@@ -11,11 +11,14 @@ import {
   createCharacter,
   hustle,
   isChoiceAvailable,
+  lifeStageForAge,
+  LIFE_STAGES,
   marry,
   meetsAgeUpRequirements,
   maxSendable,
   migrateCharacter,
   pickChoreGameVariant,
+  pickEvent,
   pray,
   receiveMoney,
   recordChoreGamePlayed,
@@ -50,6 +53,8 @@ import { WEALTH_TIERS } from "../src/content/characterCreation";
 import { LIFE_EVENTS, bandForAge } from "../src/content/lifeEvents";
 import { CHORES, ownsVehicle, pickChores } from "../src/content/chores";
 import { CLASSROOM_NPCS } from "../src/content/classroom";
+import { ASSET_LABELS } from "../src/content/ownership";
+import { isEventAllowed } from "../src/content/eventRules";
 import { SHOP_CATEGORIES, SHOP_ITEMS } from "../src/content/shop";
 import { SKILLS, SKILL_TRAIN_COST } from "../src/content/skills";
 
@@ -1196,5 +1201,83 @@ describe("earn/spend-to-age-up requirement", () => {
     expect(meetsAgeUpRequirements(baby)).toBe(true);
     const kid = baseCharacter({ age: 8, earnedThisYear: 0, spentThisYear: 0 });
     expect(meetsAgeUpRequirements(kid)).toBe(true);
+  });
+});
+
+describe("pickEvent", () => {
+  it("returns null for the infant band, which has no events", () => {
+    const baby = baseCharacter({ age: 1 });
+    expect(pickEvent(baby)).toBeNull();
+  });
+
+  it("only ever returns an event that belongs to the character's current age band", () => {
+    for (let trial = 0; trial < 50; trial++) {
+      const c = baseCharacter({ age: 20 });
+      const event = pickEvent(c);
+      expect(event).not.toBeNull();
+      expect(event!.bands).toContain(bandForAge(20));
+    }
+  });
+
+  it("never returns an event that isEventAllowed rejects for the character", () => {
+    // A rich, car-owning character should never draw a struggle event like
+    // danfo-dispute (gated by maxNaira + excludesOwned: ["car"]).
+    const rich = baseCharacter({
+      age: 30,
+      stats: { happiness: 50, health: 50, smarts: 50, looks: 50, naira: 50_000_000 },
+      inventory: ["sedan-car-2"],
+    });
+    for (let trial = 0; trial < 50; trial++) {
+      const event = pickEvent(rich);
+      if (event) expect(isEventAllowed(rich, event)).toBe(true);
+    }
+  });
+
+  it("prefers an unseen event over ones already in seenEventIds when an unseen one exists", () => {
+    const band = bandForAge(20);
+    const pool = LIFE_EVENTS.filter((e) => e.bands.includes(band));
+    const allButOne = pool.slice(1).map((e) => e.id);
+    const c = baseCharacter({ age: 20, seenEventIds: allButOne });
+    const event = pickEvent(c);
+    expect(event?.id).toBe(pool[0].id);
+  });
+});
+
+describe("lifeStageForAge", () => {
+  it("maps known boundary ages to the right stage", () => {
+    expect(lifeStageForAge(0).id).toBe("infant");
+    expect(lifeStageForAge(2).id).toBe("infant");
+    expect(lifeStageForAge(3).id).toBe("child");
+    expect(lifeStageForAge(12).id).toBe("child");
+    expect(lifeStageForAge(13).id).toBe("teen");
+    expect(lifeStageForAge(17).id).toBe("teen");
+    expect(lifeStageForAge(18).id).toBe("young-adult");
+    expect(lifeStageForAge(29).id).toBe("young-adult");
+    expect(lifeStageForAge(30).id).toBe("adult");
+    expect(lifeStageForAge(59).id).toBe("adult");
+    expect(lifeStageForAge(60).id).toBe("elder");
+  });
+
+  it("covers every age from 0 to 130 with exactly one stage, and falls back to the last stage beyond it", () => {
+    for (let age = 0; age <= 130; age++) {
+      const stage = lifeStageForAge(age);
+      expect(age).toBeGreaterThanOrEqual(stage.startAge);
+      expect(age).toBeLessThanOrEqual(stage.endAge);
+    }
+    expect(lifeStageForAge(200).id).toBe(LIFE_STAGES[LIFE_STAGES.length - 1].id);
+  });
+});
+
+describe("AssetId coverage", () => {
+  // Regression guard: pos-business was once added to AssetId/ASSET_LABELS
+  // without any event actually granting it, so no player could ever obtain
+  // it. Every AssetId must be reachable via some LIFE_EVENTS grantsAsset.
+  it("every AssetId is granted by at least one life event choice", () => {
+    const grantedIds = new Set(
+      LIFE_EVENTS.flatMap((e) => e.choices.map((c) => c.grantsAsset)).filter(Boolean),
+    );
+    for (const assetId of Object.keys(ASSET_LABELS)) {
+      expect(grantedIds.has(assetId as never)).toBe(true);
+    }
   });
 });

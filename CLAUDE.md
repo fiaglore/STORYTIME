@@ -295,6 +295,47 @@ the single surviving mode, `src/ui/LifeSim.tsx`.
   exactly (an elder still has to earn, spend, and eat to age up — nothing
   about retirement waives that, since `retire()`'s pension income counts
   toward `earnedThisYear` the same as job income does).
+- **Careers: promotion, firing, unemployment, entrepreneurship.** A job
+  isn't just a flat `payPerYear` anymore — `LifeCharacter.jobLevel`
+  (0-`MAX_JOB_LEVEL`, 3) and `yearsInJob` track seniority at the
+  *current* job; `jobTitleFor` prefixes a seniority title onto the job's
+  own (`"Senior "`/`"Lead "`/`"Chief "`, `JOB_LEVEL_TITLES`), and
+  `JOB_LEVEL_PAY_BONUS` (20%/level) scales `ageUp`'s `jobPay` on top of
+  the existing `payMultiplier` smarts scaling — a Chief-level earner
+  makes 60% more than an entry-level one in the same role.
+  `rollCareerChanges` (called from `ageUp`, after this year's pay is
+  already locked in — same "this year's number is set, only next year's
+  setup changes" shape as `pensionSavings`) rolls both:
+  - **Promotion**: once `yearsInJob` clears `PROMOTION_MIN_YEARS_IN_JOB`
+    (2) and `jobLevel < MAX_JOB_LEVEL`, a `PROMOTION_CHANCE` (25%) roll
+    bumps `jobLevel` and resets `yearsInJob` to 0 — each level needs its
+    own wait, not a free run to Chief.
+  - **Firing**: a flat `FIRING_CHANCE` (4%/yr) risk, independent of
+    performance — real job insecurity, not something smarts/looks can
+    buy away. Resets `job` to `"none"`, `jobLevel`/`yearsInJob` to 0, and
+    starts `unemployedStreak` at 1.
+  `takeJob` resets `jobLevel`/`yearsInJob`/`unemployedStreak` to 0 on any
+  (new) job — seniority doesn't carry across a job change, same as a
+  real one. **Unemployment** isn't a free ride: `unemployedStreak`
+  (`modifiers.ts`'s `unemploymentStrain`) costs happiness every year past
+  `UNEMPLOYMENT_STRAIN_THRESHOLD` (2), capped rather than spiraling, same
+  "drift, not punishment" shape as `moodHealthDrift`.
+  **Entrepreneurship**: `LifeCharacter.businessCapital` is a separate,
+  stackable-with-a-job venture — `startBusiness`/`closeBusiness` are
+  "refuse rather than throw" the same as every other gated mutator here
+  (one business at a time, `MIN_BUSINESS_CAPITAL` ₦500k floor,
+  unaffordable refused). Unlike a job's fixed pay, `ageUp` computes its
+  yearly return as `BUSINESS_RETURN_RATE` (35%) randomly swung by
+  +/-`BUSINESS_RETURN_VARIANCE` (60%) of invested capital — a bad year
+  can be a real loss (negative income), not just smaller profit; this is
+  logged every year (`"Your business brought in ₦X"` /
+  `"Rough year for the business — lost ₦X"`), same style as
+  `yearlyPassiveEffects`' asset-income lines. `closeBusiness` recovers
+  only `BUSINESS_CLOSE_RATE` (50%) of whatever capital's left and is
+  deliberately *not* routed through `trackNaira`, same as `sellItem`'s
+  refund — otherwise starting and immediately closing a business would
+  "earn" toward Age Up's requirement for free. The Bank tab shows and
+  drives all of this alongside savings/loans.
 - Retirement/pension: `RETIREMENT_AGE` (60, matching both the real
   Nigerian Contributory Pension Scheme's civil-service retirement age and
   `LIFE_STAGES`' "elder" band start — not a coincidence) is when the

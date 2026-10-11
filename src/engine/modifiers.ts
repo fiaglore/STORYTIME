@@ -38,6 +38,15 @@ export function laborFitnessBonus(character: Pick<LifeCharacter, "choreSkills">)
   return (character.choreSkills?.labor ?? 0) >= 60 ? 1 : 0;
 }
 
+// Real unemployment distress, not a free ride on hustle()/savings: once a
+// character has gone a couple of years without a job, every further
+// jobless year costs a little happiness — capped so it doesn't spiral
+// forever, the same "drift, not punishment" shape as moodHealthDrift.
+const UNEMPLOYMENT_STRAIN_THRESHOLD = 2;
+export function unemploymentStrain(character: Pick<LifeCharacter, "unemployedStreak">): number {
+  return character.unemployedStreak > UNEMPLOYMENT_STRAIN_THRESHOLD ? -2 : 0;
+}
+
 // Every 5th consecutive healthy year pays out.
 export function streakReward(streak: number): { delta: StatDelta; text: string } | null {
   if (streak > 0 && streak % 5 === 0) {

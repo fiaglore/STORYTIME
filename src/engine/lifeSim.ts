@@ -32,6 +32,7 @@ import {
   moodHealthDrift,
   payMultiplier,
   streakReward,
+  unemploymentStrain,
 } from "./modifiers";
 
 export type { AssetId };
@@ -68,6 +69,44 @@ export const JOBS: Job[] = [
   { id: "civil-servant", title: "Civil Servant", minAge: 18, payPerYear: 900_000, requiresSkill: { skill: "communication", level: 20 } },
   { id: "tech", title: "Tech Hustler", minAge: 18, payPerYear: 2_200_000, requiresSkill: { skill: "tech", level: 40 } },
 ];
+
+// --- Careers: promotion, firing, unemployment, entrepreneurship. ---
+
+// Seniority titles, prefixed onto a job's own title (see jobTitleFor) —
+// "Senior Tech Hustler", "Chief Civil Servant". Index = jobLevel.
+export const JOB_LEVEL_TITLES = ["", "Senior ", "Lead ", "Chief "];
+export const MAX_JOB_LEVEL = JOB_LEVEL_TITLES.length - 1;
+// +20% pay per level — a Chief-level (level 3) earner makes 60% more than
+// an entry-level one in the same role.
+export const JOB_LEVEL_PAY_BONUS = 0.2;
+// Eligible for a promotion roll only after this many consecutive years in
+// the same job — tenure has to mean something.
+export const PROMOTION_MIN_YEARS_IN_JOB = 2;
+export const PROMOTION_CHANCE = 0.25;
+// A flat yearly risk of being let go, independent of performance — real
+// job insecurity, not something a player can fully guard against.
+export const FIRING_CHANCE = 0.04;
+
+export function jobTitleFor(jobId: JobId, jobLevel: number): string | null {
+  const def = JOBS.find((j) => j.id === jobId);
+  if (!def) return null;
+  return `${JOB_LEVEL_TITLES[Math.min(jobLevel, MAX_JOB_LEVEL)]}${def.title}`;
+}
+
+// Self-employment, independent of (and stackable with) a regular job —
+// see startBusiness/closeBusiness below. Unlike a job's fixed payPerYear,
+// a business's yearly return is genuinely volatile: BUSINESS_RETURN_RATE
+// is the expected return as a fraction of invested capital, and
+// BUSINESS_RETURN_VARIANCE is how far a single year can swing from that
+// expectation in either direction — a bad year can mean a real loss, not
+// just "less profit than usual". Real entrepreneurial risk that a salaried
+// job doesn't carry.
+export const MIN_BUSINESS_CAPITAL = 500_000;
+export const BUSINESS_RETURN_RATE = 0.35;
+export const BUSINESS_RETURN_VARIANCE = 0.6;
+// What closing a business recovers, as a fraction of its remaining
+// capital — same "you don't get it all back" shape as SELL_RATE.
+export const BUSINESS_CLOSE_RATE = 0.5;
 
 export interface LifeCharacter {
   name: string;
@@ -187,6 +226,25 @@ export interface LifeCharacter {
   // takeLoan/repayLoan/MAX_LOAN_AMOUNT. Only one loan at a time, same
   // "one active X at a time" shape as retire()/pensionPerYear.
   loanBalance: number;
+  // 0-MAX_JOB_LEVEL seniority at the current job — see JOB_LEVEL_TITLES/
+  // JOB_LEVEL_PAY_BONUS. Reset to 0 by takeJob whenever a character starts
+  // a (new) job; grown by a yearly promotion roll in ageUp once
+  // yearsInJob clears PROMOTION_MIN_YEARS_IN_JOB.
+  jobLevel: number;
+  // Consecutive years at the current job, reset to 0 by takeJob — tenure,
+  // not total career length. Gates promotion eligibility.
+  yearsInJob: number;
+  // Consecutive years with job === "none" (not retired) — resets to 0 the
+  // moment a job is taken. Past UNEMPLOYMENT_STRAIN_THRESHOLD, costs a
+  // little happiness every year (see unemploymentStrain in modifiers.ts) —
+  // real unemployment distress, not a free ride.
+  unemployedStreak: number;
+  // Capital invested in a self-started business (0 = none) — see
+  // startBusiness/closeBusiness/MIN_BUSINESS_CAPITAL. Unlike a job, yearly
+  // return is volatile (BUSINESS_RETURN_RATE +/- BUSINESS_RETURN_VARIANCE)
+  // and can be a loss some years — real entrepreneurial risk, independent
+  // of (and stackable with) a regular job.
+  businessCapital: number;
 }
 
 export interface LifeStage {
@@ -302,6 +360,10 @@ export function createCharacter(opts: CreateCharacterOptions): LifeCharacter {
     retired: false,
     savings: 0,
     loanBalance: 0,
+    jobLevel: 0,
+    yearsInJob: 0,
+    unemployedStreak: 0,
+    businessCapital: 0,
   };
 }
 
@@ -459,6 +521,64 @@ export function checkDeath(character: LifeCharacter): string | null {
   return null;
 }
 
+interface CareerChanges {
+  job: JobId;
+  jobLevel: number;
+  yearsInJob: number;
+  unemployedStreak: number;
+  log: string[];
+}
+
+// Rolled once a year in ageUp, using this year's just-completed tenure —
+// doesn't touch this year's already-computed pay, only what happens from
+// next year on (same "this year's pay is locked in, only next year's
+// setup changes" shape as pensionSavings/retire()). Retirement is its own
+// one-way door (see retire()) and isn't touched by any of this.
+function rollCareerChanges(character: LifeCharacter, nextAge: number): CareerChanges {
+  if (character.retired) {
+    return {
+      job: character.job,
+      jobLevel: character.jobLevel,
+      yearsInJob: character.yearsInJob,
+      unemployedStreak: character.unemployedStreak,
+      log: [],
+    };
+  }
+  if (character.job === "none") {
+    return {
+      job: "none",
+      jobLevel: 0,
+      yearsInJob: 0,
+      unemployedStreak: character.unemployedStreak + 1,
+      log: [],
+    };
+  }
+  const title = jobTitleFor(character.job, character.jobLevel) ?? "job";
+  const yearsInJob = character.yearsInJob + 1;
+  if (Math.random() < FIRING_CHANCE) {
+    return {
+      job: "none",
+      jobLevel: 0,
+      yearsInJob: 0,
+      unemployedStreak: 1,
+      log: [`Age ${nextAge}: Let go from ${title.toLowerCase()} — no warning, no severance.`],
+    };
+  }
+  if (character.jobLevel < MAX_JOB_LEVEL && yearsInJob >= PROMOTION_MIN_YEARS_IN_JOB && Math.random() < PROMOTION_CHANCE) {
+    const newTitle = jobTitleFor(character.job, character.jobLevel + 1) ?? title;
+    return {
+      job: character.job,
+      jobLevel: character.jobLevel + 1,
+      // A fresh clock on tenure — each level needs its own wait, same as
+      // the first one did.
+      yearsInJob: 0,
+      unemployedStreak: 0,
+      log: [`Age ${nextAge}: Promoted to ${newTitle.toLowerCase()}.`],
+    };
+  }
+  return { job: character.job, jobLevel: character.jobLevel, yearsInJob, unemployedStreak: 0, log: [] };
+}
+
 // Advances one year: natural drift, job income, then the death check. Event
 // resolution happens separately via applyDelta once the player picks a
 // choice, since the UI needs to show the event before stats change. Also
@@ -469,10 +589,21 @@ export function ageUp(character: LifeCharacter): LifeCharacter {
   if (!character.alive) return character;
   const nextAge = character.age + 1;
   const passive = yearlyPassiveEffects(character, nextAge);
-  // Smarts scale pay (see payMultiplier); owned assets and property add
+  // Smarts scale pay (see payMultiplier); seniority (see JOB_LEVEL_TITLES/
+  // JOB_LEVEL_PAY_BONUS) scales it further; owned assets and property add
   // passive income on top (see passive above), independent of job/
   // retirement status.
-  const jobPay = Math.round(jobIncome(character.job) * payMultiplier(character));
+  const jobPay = Math.round(
+    jobIncome(character.job) * payMultiplier(character) * (1 + character.jobLevel * JOB_LEVEL_PAY_BONUS),
+  );
+  // A self-started business's return is genuinely volatile — see
+  // BUSINESS_RETURN_RATE/BUSINESS_RETURN_VARIANCE — and can land negative
+  // in a bad year. Independent of job/retirement status, same as passive
+  // asset income.
+  const businessIncome =
+    character.businessCapital > 0
+      ? Math.round(character.businessCapital * (BUSINESS_RETURN_RATE + (Math.random() * 2 - 1) * BUSINESS_RETURN_VARIANCE))
+      : 0;
   const birthday = birthdayEffects(character.birthDate, nextAge);
   // Retired: income is this year's pension draw (capped at what's left in
   // the pot, not pensionPerYear itself — the pot can run out before the
@@ -480,7 +611,7 @@ export function ageUp(character: LifeCharacter): LifeCharacter {
   // year's (smarts-scaled) pay instead. The two are mutually exclusive
   // since retire() forces job to "none".
   const pensionPayout = character.retired ? Math.min(character.pensionPerYear, character.pensionSavings) : 0;
-  const income = (character.retired ? pensionPayout : jobPay) + passive.naira;
+  const income = (character.retired ? pensionPayout : jobPay) + passive.naira + businessIncome;
   const pensionSavings = character.retired
     ? character.pensionSavings - pensionPayout
     : character.pensionSavings + Math.round(jobPay * PENSION_CONTRIBUTION_RATE);
@@ -500,7 +631,12 @@ export function ageUp(character: LifeCharacter): LifeCharacter {
       moodHealthDrift(character) +
       passive.health +
       laborFitnessBonus(character),
-    happiness: randomInt(-1, 1) + (schoolDelta.happiness ?? 0) + passive.happiness + birthday.happiness,
+    happiness:
+      randomInt(-1, 1) +
+      (schoolDelta.happiness ?? 0) +
+      passive.happiness +
+      birthday.happiness +
+      unemploymentStrain(character),
     naira: income + (schoolDelta.naira ?? 0),
     smarts: (schoolDelta.smarts ?? 0) + passive.smarts,
   });
@@ -520,6 +656,17 @@ export function ageUp(character: LifeCharacter): LifeCharacter {
   // action does.
   const { spentThisYear } = trackNaira({ earnedThisYear: 0, spentThisYear: 0 }, prevNaira + income, stats.naira);
 
+  // Promotion/firing/unemployment are rolled using this year's just-
+  // completed tenure — they decide next year's job setup, not this year's
+  // already-computed pay.
+  const career = rollCareerChanges(character, nextAge);
+  const businessLog =
+    businessIncome > 0
+      ? [`Age ${nextAge}: Your business brought in ₦${businessIncome.toLocaleString()}.`]
+      : businessIncome < 0
+        ? [`Age ${nextAge}: Rough year for the business — lost ₦${Math.abs(businessIncome).toLocaleString()}.`]
+        : [];
+
   const next: LifeCharacter = {
     ...character,
     age: nextAge,
@@ -527,6 +674,10 @@ export function ageUp(character: LifeCharacter): LifeCharacter {
     pensionSavings,
     savings,
     loanBalance,
+    job: career.job,
+    jobLevel: career.jobLevel,
+    yearsInJob: career.yearsInJob,
+    unemployedStreak: career.unemployedStreak,
     streak: nextStreak(character.streak, stats.health),
     earnedThisYear: income > 0 ? income : 0,
     spentThisYear,
@@ -534,7 +685,7 @@ export function ageUp(character: LifeCharacter): LifeCharacter {
     prayersThisYear: 0,
     ateThisYear: false,
     classroomTalksThisYear: 0,
-    log: [...character.log, ...birthday.log, ...passive.log],
+    log: [...character.log, ...birthday.log, ...passive.log, ...businessLog, ...career.log],
   };
   // One-time flavor line the year the pension pot actually empties, not
   // every year after — real pension-delay/exhaustion precarity, not spam.
@@ -748,6 +899,11 @@ export function takeJob(character: LifeCharacter, job: JobId): LifeCharacter {
   return {
     ...character,
     job,
+    // A new job (or returning to the same one) starts back at entry level
+    // — seniority doesn't carry over, same as a real job change.
+    jobLevel: 0,
+    yearsInJob: 0,
+    unemployedStreak: 0,
     log: [...character.log, `Age ${character.age}: Started working as a ${def.title}.`],
   };
 }
@@ -877,6 +1033,44 @@ export function repayLoan(character: LifeCharacter, amount: number): LifeCharact
     ...trackNaira(character, prevNaira, stats.naira),
     loanBalance: character.loanBalance - amount,
     log: [...character.log, `Age ${character.age}: Repaid ₦${amount.toLocaleString()} of the loan.`],
+  };
+}
+
+// Only one business at a time — refuses (rather than throws) while one is
+// already running, under MIN_BUSINESS_CAPITAL, or unaffordable, same
+// "refuse rather than throw" pattern as every other gated mutator here.
+// Independent of job — a character can run a business alongside a regular
+// job, or instead of one.
+export function startBusiness(character: LifeCharacter, capital: number): LifeCharacter {
+  if (character.businessCapital > 0 || capital < MIN_BUSINESS_CAPITAL || capital > character.stats.naira) {
+    return character;
+  }
+  const prevNaira = character.stats.naira;
+  const stats = applyDelta(character.stats, { naira: -capital });
+  return {
+    ...character,
+    stats,
+    ...trackNaira(character, prevNaira, stats.naira),
+    businessCapital: capital,
+    log: [...character.log, `Age ${character.age}: Started a business with ₦${capital.toLocaleString()}.`],
+  };
+}
+
+// Recovers BUSINESS_CLOSE_RATE of whatever capital is left (it isn't
+// grown/shrunk retroactively by past years' returns — businessCapital
+// itself never changes year to year, only the income it throws off does;
+// see the business income line in ageUp). Deliberately NOT routed through
+// trackNaira, same as sellItem's refund — otherwise starting and
+// immediately closing a business would be a way to "earn" toward Age
+// Up's requirement for free.
+export function closeBusiness(character: LifeCharacter): LifeCharacter {
+  if (character.businessCapital <= 0) return character;
+  const refund = Math.round(character.businessCapital * BUSINESS_CLOSE_RATE);
+  return {
+    ...character,
+    stats: applyDelta(character.stats, { naira: refund }),
+    businessCapital: 0,
+    log: [...character.log, `Age ${character.age}: Closed the business, recovering ₦${refund.toLocaleString()}.`],
   };
 }
 
@@ -1219,7 +1413,7 @@ export function formatObituaryText(character: LifeCharacter): string {
 // number itself isn't branched on anywhere, it's just there for the day a
 // real structural migration (not just "fill in a missing field") is
 // needed and something has to tell saves apart.
-export const SAVE_VERSION = 3;
+export const SAVE_VERSION = 4;
 
 export interface SaveFile {
   version: number;
@@ -1251,6 +1445,10 @@ const CHARACTER_FIELD_DEFAULTS = {
   retired: false,
   savings: 0,
   loanBalance: 0,
+  jobLevel: 0,
+  yearsInJob: 0,
+  unemployedStreak: 0,
+  businessCapital: 0,
 };
 
 // Takes whatever was actually in storage — a bare old-shape character

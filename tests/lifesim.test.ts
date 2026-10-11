@@ -93,6 +93,10 @@ function baseCharacter(overrides: Partial<LifeCharacter> = {}): LifeCharacter {
     retired: false,
     savings: 0,
     loanBalance: 0,
+    jobLevel: 0,
+    yearsInJob: 0,
+    unemployedStreak: 0,
+    businessCapital: 0,
     ...overrides,
   };
 }

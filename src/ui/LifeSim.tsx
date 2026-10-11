@@ -7,10 +7,12 @@ import {
   buyItem,
   changeFaith,
   chooseSchool,
+  closeBusiness,
   createCharacter,
   depositToSavings,
   hustle,
   isChoiceAvailable,
+  jobTitleFor,
   lifeStageForAge,
   meetsAgeUpRequirements,
   migrateCharacter,
@@ -25,6 +27,7 @@ import {
   retire,
   reviveCharacter,
   rollWealthTier,
+  startBusiness,
   summarizeLife,
   formatObituaryText,
   takeJob,
@@ -36,6 +39,7 @@ import {
   trainSkill,
   AGE_SCHOOL_CHOICE_CUTOFF,
   AGE_UP_REQUIREMENTS,
+  BUSINESS_CLOSE_RATE,
   CRITICAL_HEALTH_THRESHOLD,
   INFLATION_RATE,
   JOBS,
@@ -43,6 +47,7 @@ import {
   MAX_CLASSROOM_TALKS_PER_YEAR,
   MAX_HUSTLES_PER_YEAR,
   MAX_LOAN_AMOUNT,
+  MIN_BUSINESS_CAPITAL,
   PENSION_ANNUITY_RATE,
   RETIREMENT_AGE,
   REVIVE_COST,
@@ -381,6 +386,17 @@ export function LifeSim({ onExit }: Props) {
     if (!character || !validBankAmount) return;
     setCharacter(repayLoan(character, parsedBankAmount));
     setBankAmount("");
+  };
+
+  const handleStartBusiness = () => {
+    if (!character || !validBankAmount) return;
+    setCharacter(startBusiness(character, parsedBankAmount));
+    setBankAmount("");
+  };
+
+  const handleCloseBusiness = () => {
+    if (!character) return;
+    setCharacter(closeBusiness(character));
   };
 
   const [prayerMessage, setPrayerMessage] = useState<string | null>(null);
@@ -801,10 +817,13 @@ export function LifeSim({ onExit }: Props) {
       <p className="lifesim-job">
         {character.retired
           ? `Retired — drawing ₦${character.pensionPerYear.toLocaleString()}/yr pension (₦${character.pensionSavings.toLocaleString()} left)`
-          : job
-            ? `Working as a ${job.title}`
+          : character.job !== "none"
+            ? `Working as a ${jobTitleFor(character.job, character.jobLevel)?.toLowerCase() ?? "worker"}`
             : "No job yet"}
       </p>
+      {character.businessCapital > 0 && (
+        <p className="lifesim-job">Running a business — ₦{character.businessCapital.toLocaleString()} invested</p>
+      )}
 
       <div className="lifesim-prayer">
         <button
@@ -1120,6 +1139,38 @@ export function LifeSim({ onExit }: Props) {
               }
             >
               Repay loan
+            </button>
+          </div>
+
+          <p className="lifesim-hint">
+            Starting a business risks the capital — a bad year can mean a real loss, not just smaller profit.
+            Closing one out recovers only {Math.round(BUSINESS_CLOSE_RATE * 100)}% of what's left in it.
+          </p>
+          <div className="lifesim-bank__row">
+            <span>Business capital</span>
+            <span className="lifesim-bank__value">₦{character.businessCapital.toLocaleString()}</span>
+          </div>
+          <div className="lifesim-bank__actions">
+            <button
+              className="rpg-choice-pill"
+              onClick={handleStartBusiness}
+              disabled={
+                !validBankAmount ||
+                character.businessCapital > 0 ||
+                parsedBankAmount < MIN_BUSINESS_CAPITAL ||
+                parsedBankAmount > character.stats.naira
+              }
+            >
+              {character.businessCapital > 0
+                ? "Already running a business"
+                : `Start a business (min ₦${MIN_BUSINESS_CAPITAL.toLocaleString()})`}
+            </button>
+            <button
+              className="rpg-choice-pill"
+              onClick={handleCloseBusiness}
+              disabled={character.businessCapital <= 0}
+            >
+              Close business
             </button>
           </div>
         </div>

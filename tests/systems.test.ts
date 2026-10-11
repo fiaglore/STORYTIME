@@ -1,22 +1,32 @@
 import { describe, expect, it } from "vitest";
 import {
   AGE_UP_REQUIREMENTS,
+  BUSINESS_CLOSE_RATE,
+  FIRING_CHANCE,
   INFLATION_RATE,
+  JOB_LEVEL_PAY_BONUS,
   LOAN_INTEREST_RATE,
   MAX_HUSTLES_PER_YEAR,
+  MAX_JOB_LEVEL,
   MAX_LOAN_AMOUNT,
+  MIN_BUSINESS_CAPITAL,
+  PROMOTION_MIN_YEARS_IN_JOB,
   SAVINGS_INTEREST_RATE,
   SELL_RATE,
   ageUp,
   availableJobs,
   buyItem,
+  closeBusiness,
   depositToSavings,
   hustle,
+  jobTitleFor,
   pickEvents,
   repayLoan,
   resolveChore,
   resolveEvent,
   sellItem,
+  startBusiness,
+  takeJob,
   takeLoan,
   withdrawFromSavings,
   type LifeCharacter,
@@ -69,6 +79,10 @@ function baseCharacter(overrides: Partial<LifeCharacter> = {}): LifeCharacter {
     choreGameHistory: {},
     savings: 0,
     loanBalance: 0,
+    jobLevel: 0,
+    yearsInJob: 0,
+    unemployedStreak: 0,
+    businessCapital: 0,
     ...overrides,
   };
 }
@@ -473,5 +487,163 @@ describe("economy: savings, loans, interest", () => {
   it("inflation backdrop: savings grow slower than inflation, loans grow faster", () => {
     expect(SAVINGS_INTEREST_RATE).toBeLessThan(INFLATION_RATE);
     expect(LOAN_INTEREST_RATE).toBeGreaterThan(INFLATION_RATE);
+  });
+});
+
+describe("careers: promotion, firing, unemployment, entrepreneurship", () => {
+  describe("job titles and levels", () => {
+    it("jobTitleFor prefixes seniority onto the job's own title", () => {
+      expect(jobTitleFor("hawker", 0)).toBe("Street Hawker");
+      expect(jobTitleFor("hawker", 1)).toBe("Senior Street Hawker");
+      expect(jobTitleFor("hawker", MAX_JOB_LEVEL)).toBe("Chief Street Hawker");
+      expect(jobTitleFor("none", 0)).toBeNull();
+    });
+
+    it("takeJob resets jobLevel/yearsInJob/unemployedStreak on a (new) job", () => {
+      const c = baseCharacter({ jobLevel: 2, yearsInJob: 5, unemployedStreak: 3, job: "none" });
+      const next = takeJob(c, "hawker");
+      expect(next.job).toBe("hawker");
+      expect(next.jobLevel).toBe(0);
+      expect(next.yearsInJob).toBe(0);
+      expect(next.unemployedStreak).toBe(0);
+    });
+
+    it("job level scales pay by JOB_LEVEL_PAY_BONUS per level", () => {
+      const entry = baseCharacter({ age: 30, job: "hawker", jobLevel: 0, stats: withNaira(0) });
+      const chief = baseCharacter({ age: 30, job: "hawker", jobLevel: MAX_JOB_LEVEL, stats: withNaira(0) });
+      const entryPay = ageUp(entry).earnedThisYear;
+      const chiefPay = ageUp(chief).earnedThisYear;
+      expect(chiefPay).toBeGreaterThan(entryPay);
+      expect(chiefPay).toBeCloseTo(entryPay * (1 + MAX_JOB_LEVEL * JOB_LEVEL_PAY_BONUS), -1);
+    });
+  });
+
+  describe("promotion", () => {
+    it("never promotes before PROMOTION_MIN_YEARS_IN_JOB tenure", () => {
+      const fresh = baseCharacter({ age: 30, job: "hawker", jobLevel: 0, yearsInJob: 0 });
+      // One year in isn't enough yet (PROMOTION_MIN_YEARS_IN_JOB is 2).
+      expect(ageUp(fresh).jobLevel).toBe(0);
+    });
+
+    it("over many trials, an eligible employee both does and doesn't get promoted", () => {
+      let promoted = 0;
+      let notPromoted = 0;
+      for (let trial = 0; trial < 200; trial++) {
+        const c = baseCharacter({
+          age: 30,
+          job: "hawker",
+          jobLevel: 0,
+          yearsInJob: PROMOTION_MIN_YEARS_IN_JOB,
+        });
+        if (ageUp(c).jobLevel > 0) promoted++;
+        else notPromoted++;
+      }
+      expect(promoted).toBeGreaterThan(0);
+      expect(notPromoted).toBeGreaterThan(0);
+    });
+
+    it("never promotes past MAX_JOB_LEVEL", () => {
+      // jobLevel resets to 0 if the firing roll happens to fire this same
+      // year, so the real invariant under test is "never exceeds the cap",
+      // not "always stays exactly at it".
+      for (let trial = 0; trial < 50; trial++) {
+        const maxed = baseCharacter({
+          age: 30,
+          job: "hawker",
+          jobLevel: MAX_JOB_LEVEL,
+          yearsInJob: PROMOTION_MIN_YEARS_IN_JOB,
+        });
+        expect(ageUp(maxed).jobLevel).toBeLessThanOrEqual(MAX_JOB_LEVEL);
+      }
+    });
+
+    it("a promotion resets yearsInJob so the next level needs its own tenure", () => {
+      for (let trial = 0; trial < 200; trial++) {
+        const c = baseCharacter({ age: 30, job: "hawker", jobLevel: 0, yearsInJob: PROMOTION_MIN_YEARS_IN_JOB });
+        const next = ageUp(c);
+        if (next.jobLevel > 0) {
+          expect(next.yearsInJob).toBe(0);
+          return;
+        }
+      }
+      throw new Error("never observed a promotion across 200 trials");
+    });
+  });
+
+  describe("firing and unemployment", () => {
+    it("over many trials, an employed character is sometimes fired", () => {
+      let fired = 0;
+      for (let trial = 0; trial < 500; trial++) {
+        const c = baseCharacter({ age: 30, job: "hawker", jobLevel: 1, yearsInJob: 5 });
+        const next = ageUp(c);
+        if (next.job === "none") {
+          fired++;
+          expect(next.jobLevel).toBe(0);
+          expect(next.yearsInJob).toBe(0);
+          expect(next.unemployedStreak).toBe(1);
+        }
+      }
+      // FIRING_CHANCE is small (4%); 500 trials makes a zero-fired run
+      // astronomically unlikely (0.96^500 ≈ 4e-9) without being flaky.
+      expect(fired).toBeGreaterThan(0);
+      expect(FIRING_CHANCE).toBeLessThan(0.1);
+    });
+
+    it("unemployment streak grows while job stays none", () => {
+      const c = baseCharacter({ age: 30, job: "none", unemployedStreak: 1 });
+      expect(ageUp(c).unemployedStreak).toBe(2);
+    });
+
+    it("sustained unemployment costs happiness via unemploymentStrain", async () => {
+      const { unemploymentStrain } = await import("../src/engine/modifiers");
+      expect(unemploymentStrain({ unemployedStreak: 0 })).toBe(0);
+      expect(unemploymentStrain({ unemployedStreak: 2 })).toBe(0);
+      expect(unemploymentStrain({ unemployedStreak: 3 })).toBeLessThan(0);
+    });
+  });
+
+  describe("entrepreneurship", () => {
+    it("starts a business, deducting capital and counting it as spent", () => {
+      const c = baseCharacter({ stats: withNaira(1_000_000), spentThisYear: 0 });
+      const next = startBusiness(c, MIN_BUSINESS_CAPITAL);
+      expect(next.businessCapital).toBe(MIN_BUSINESS_CAPITAL);
+      expect(next.stats.naira).toBe(1_000_000 - MIN_BUSINESS_CAPITAL);
+      expect(next.spentThisYear).toBe(MIN_BUSINESS_CAPITAL);
+    });
+
+    it("refuses starting a business under MIN_BUSINESS_CAPITAL, unaffordable, or while one's already running", () => {
+      const poor = baseCharacter({ stats: withNaira(100) });
+      expect(startBusiness(poor, MIN_BUSINESS_CAPITAL).businessCapital).toBe(0);
+      const cheap = baseCharacter({ stats: withNaira(10_000_000) });
+      expect(startBusiness(cheap, MIN_BUSINESS_CAPITAL - 1).businessCapital).toBe(0);
+      const running = baseCharacter({ stats: withNaira(10_000_000), businessCapital: 500_000 });
+      expect(startBusiness(running, MIN_BUSINESS_CAPITAL).businessCapital).toBe(500_000);
+    });
+
+    it("closing a business recovers BUSINESS_CLOSE_RATE of the capital, not counted as earned", () => {
+      const c = baseCharacter({ businessCapital: 1_000_000, stats: withNaira(0), earnedThisYear: 0 });
+      const next = closeBusiness(c);
+      expect(next.businessCapital).toBe(0);
+      expect(next.stats.naira).toBe(Math.round(1_000_000 * BUSINESS_CLOSE_RATE));
+      expect(next.earnedThisYear).toBe(0);
+    });
+
+    it("refuses closing a business that doesn't exist", () => {
+      const c = baseCharacter({ businessCapital: 0 });
+      expect(closeBusiness(c)).toBe(c);
+    });
+
+    it("business income is volatile year to year, and can be a loss", () => {
+      const incomes = new Set<number>();
+      let sawLoss = false;
+      for (let trial = 0; trial < 100; trial++) {
+        const c = baseCharacter({ age: 30, job: "none", businessCapital: 1_000_000, stats: withNaira(0) });
+        const next = ageUp(c);
+        incomes.add(next.stats.naira);
+        if (next.earnedThisYear === 0 && next.stats.naira === 0) sawLoss = true;
+      }
+      expect(incomes.size).toBeGreaterThan(1); // genuinely different outcomes, not a fixed payout
+      expect(sawLoss).toBe(true);
+    });
   });
 });

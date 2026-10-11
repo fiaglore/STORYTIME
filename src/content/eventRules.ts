@@ -68,6 +68,11 @@ export const EVENT_RULES: Record<string, EventRule> = {
   "island-party": { minNaira: 10_000_000 },
   // A wedding only happens to someone who isn't already married.
   "wedding-costs": { unmarried: true },
+  // Elder-band content: gated on affording an honour, having a home to
+  // downsize, or having a job to be asked for advice at.
+  "chieftaincy-title": { minNaira: 1_500_000 },
+  "downsize-the-house": { requiresOwned: ["home"] },
+  "mentor-at-work": { requiresJob: true },
 };
 
 export function isEventAllowed(character: LifeCharacter, event: Pick<LifeEvent, "id">): boolean {

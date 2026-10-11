@@ -341,6 +341,7 @@ export const AGE_UP_REQUIREMENTS: Record<AgeBand, { minEarn: number; minSpend: n
   child: { minEarn: 0, minSpend: 0, requiresFood: false },
   teen: { minEarn: 200, minSpend: 200, requiresFood: true },
   adult: { minEarn: 3000, minSpend: 3000, requiresFood: true },
+  elder: { minEarn: 3000, minSpend: 3000, requiresFood: true },
 };
 
 export function meetsAgeUpRequirements(character: LifeCharacter): boolean {
@@ -392,6 +393,7 @@ export const CHORES_PER_YEAR_BY_BAND: Record<AgeBand, number> = {
   child: 2,
   teen: 4,
   adult: 4,
+  elder: 4,
 };
 
 export const EVENTS_PER_YEAR_BY_BAND: Record<AgeBand, number> = {
@@ -399,6 +401,7 @@ export const EVENTS_PER_YEAR_BY_BAND: Record<AgeBand, number> = {
   child: 2,
   teen: 5,
   adult: 5,
+  elder: 5,
 };
 
 function shuffled<T>(items: T[]): T[] {

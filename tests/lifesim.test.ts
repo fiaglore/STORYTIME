@@ -99,8 +99,8 @@ describe("lifeEvents data", () => {
   // Infants (age 0-2) are too young to make choices, so "infant" has no
   // event pool by design — pickEvent() returns null and ageUp() just
   // applies natural stat drift for those years.
-  it("covers every choice-making age band (child, teen, adult) with events", () => {
-    const bands: ReturnType<typeof bandForAge>[] = ["child", "teen", "adult"];
+  it("covers every choice-making age band (child, teen, adult, elder) with events", () => {
+    const bands: ReturnType<typeof bandForAge>[] = ["child", "teen", "adult", "elder"];
     for (const band of bands) {
       const pool = LIFE_EVENTS.filter((e) => e.bands.includes(band));
       expect(pool.length).toBeGreaterThan(0);
@@ -377,7 +377,7 @@ describe("ageUp resilience streak", () => {
 
 describe("chores", () => {
   it("covers every choice-making age band with at least one chore", () => {
-    const bands: ReturnType<typeof bandForAge>[] = ["child", "teen", "adult"];
+    const bands: ReturnType<typeof bandForAge>[] = ["child", "teen", "adult", "elder"];
     for (const band of bands) {
       expect(CHORES.filter((c) => c.bands.includes(band)).length).toBeGreaterThan(0);
     }

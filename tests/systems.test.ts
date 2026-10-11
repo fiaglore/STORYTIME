@@ -12,6 +12,7 @@ import {
   sellItem,
   type LifeCharacter,
 } from "../src/engine/lifeSim";
+import { bandForAge } from "../src/content/lifeEvents";
 import {
   birthdayEffects,
   hustleMultiplier,
@@ -20,7 +21,7 @@ import {
   zodiacFor,
 } from "../src/engine/modifiers";
 import { CHORES, pickChores } from "../src/content/chores";
-import { EVENT_RULES } from "../src/content/eventRules";
+import { EVENT_RULES, isEventAllowed } from "../src/content/eventRules";
 import { LIFE_EVENTS } from "../src/content/lifeEvents";
 import { SHOP_ITEMS } from "../src/content/shop";
 
@@ -275,5 +276,74 @@ describe("streaks, chore skills and birthdays", () => {
     expect(birthdayEffects("2000-08-23", 22).log).toEqual([]);
     const next = ageUp(baseCharacter({ age: 17 }));
     expect(next.log.some((l) => l.includes("Birthday"))).toBe(true);
+  });
+});
+
+const ELDER_ONLY_EVENT_IDS = [
+  "grandchildren-visit",
+  "chieftaincy-title",
+  "burial-society-dues",
+  "estate-planning",
+  "elder-scam-call",
+  "routine-checkup",
+  "downsize-the-house",
+  "mentor-at-work",
+  "community-council-invite",
+  "old-friends-reunion",
+  "village-land-dispute",
+  "grandchild-school-fees",
+];
+
+describe("elder band (age 60+)", () => {
+  it("the band cutoff is exactly at 59/60", () => {
+    expect(bandForAge(59)).toBe("adult");
+    expect(bandForAge(60)).toBe("elder");
+  });
+
+  it("AGE_UP_REQUIREMENTS.elder matches .adult", () => {
+    expect(AGE_UP_REQUIREMENTS.elder).toEqual(AGE_UP_REQUIREMENTS.adult);
+  });
+
+  it("an elder still sees the full adult event pool, not just the new elder-only events", () => {
+    const elder = baseCharacter({ age: 65 });
+    const ids = eventIds(elder);
+    const adultOnlyExample = "family-request";
+    expect(ids).toContain(adultOnlyExample);
+  });
+
+  it("none of the 12 new elder events ever fire below age 60", () => {
+    const adult = baseCharacter({ age: 59 });
+    const ids = eventIds(adult);
+    for (const id of ELDER_ONLY_EVENT_IDS) {
+      expect(ids).not.toContain(id);
+    }
+  });
+
+  it("all 12 new elder events are reachable once eligible", () => {
+    const elder = baseCharacter({
+      age: 65,
+      job: "tech",
+      stats: withNaira(10_000_000),
+      inventory: ["bungalow-2"],
+    });
+    const ids = eventIds(elder);
+    for (const id of ELDER_ONLY_EVENT_IDS) {
+      expect(ids).toContain(id);
+    }
+  });
+
+  it("the 3 gated elder events are individually blocked when ineligible", () => {
+    const poor = baseCharacter({ age: 65, stats: withNaira(0) });
+    const unemployed = baseCharacter({ age: 65, job: "none" });
+    const homeless = baseCharacter({ age: 65, inventory: [] });
+    expect(isEventAllowed(poor, { id: "chieftaincy-title" })).toBe(false);
+    expect(isEventAllowed(unemployed, { id: "mentor-at-work" })).toBe(false);
+    expect(isEventAllowed(homeless, { id: "downsize-the-house" })).toBe(false);
+  });
+
+  it("elder chores reuse the adult chore pool", () => {
+    const elderChores = CHORES.filter((c) => c.bands.includes("elder"));
+    const adultChores = CHORES.filter((c) => c.bands.includes("adult"));
+    expect(elderChores.length).toBe(adultChores.length);
   });
 });

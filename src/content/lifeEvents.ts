@@ -11,7 +11,7 @@
 // generator, POS capital, full school fees) is meant to be genuinely hard,
 // not a rounding error — that's the point, not a bug.
 
-export type AgeBand = "infant" | "child" | "teen" | "adult";
+export type AgeBand = "infant" | "child" | "teen" | "adult" | "elder";
 
 // Durable goods a character can own, persisted on LifeCharacter.assets.
 // Granted by resolving a choice with grantsAsset, checked by choices with
@@ -73,7 +73,10 @@ export function bandForAge(age: number): AgeBand {
   if (age <= 2) return "infant";
   if (age <= 12) return "child";
   if (age <= 17) return "teen";
-  return "adult";
+  // 60 matches both RETIREMENT_AGE in lifeSim.ts and LIFE_STAGES' "elder"
+  // band start — not a coincidence.
+  if (age <= 59) return "adult";
+  return "elder";
 }
 
 export const LIFE_EVENTS: LifeEvent[] = [
@@ -210,7 +213,7 @@ export const LIFE_EVENTS: LifeEvent[] = [
   },
   {
     id: "danfo-dispute",
-    bands: ["adult"],
+    bands: ["adult", "elder"],
     prompt: "The conductor insists the fare just went up and won't give your ₦150 change.",
     choices: [
       {
@@ -227,7 +230,7 @@ export const LIFE_EVENTS: LifeEvent[] = [
   },
   {
     id: "police-checkpoint",
-    bands: ["adult"],
+    bands: ["adult", "elder"],
     prompt: "A checkpoint stops your bike. \"Oga, anything for the boys?\"",
     choices: [
       {
@@ -244,7 +247,7 @@ export const LIFE_EVENTS: LifeEvent[] = [
   },
   {
     id: "generator-opportunity",
-    bands: ["adult"],
+    bands: ["adult", "elder"],
     prompt: "A neighbour needs quick cash and is selling his small \"I better pass my neighbour\" generator for ₦180,000.",
     choices: [
       {
@@ -263,7 +266,7 @@ export const LIFE_EVENTS: LifeEvent[] = [
   },
   {
     id: "generator-bill",
-    bands: ["adult"],
+    bands: ["adult", "elder"],
     prompt: "NEPA has taken light for four days straight.",
     choices: [
       {
@@ -281,7 +284,7 @@ export const LIFE_EVENTS: LifeEvent[] = [
   },
   {
     id: "pos-hustle",
-    bands: ["adult"],
+    bands: ["adult", "elder"],
     prompt: "A friend offers you a stake in a POS (point-of-sale) agent business on your street — ₦150,000 for the machine and float.",
     choices: [
       {
@@ -300,7 +303,7 @@ export const LIFE_EVENTS: LifeEvent[] = [
   },
   {
     id: "family-request",
-    bands: ["adult"],
+    bands: ["adult", "elder"],
     prompt: "A relative calls asking for ₦25,000 to help with a hospital bill.",
     choices: [
       {
@@ -317,7 +320,7 @@ export const LIFE_EVENTS: LifeEvent[] = [
   },
   {
     id: "japa-temptation",
-    bands: ["adult"],
+    bands: ["adult", "elder"],
     prompt: "A former classmate posts from abroad: \"This place changed my life. You should come too.\"",
     choices: [
       {
@@ -334,7 +337,7 @@ export const LIFE_EVENTS: LifeEvent[] = [
   },
   {
     id: "go-slow",
-    bands: ["adult"],
+    bands: ["adult", "elder"],
     prompt: "Third Mainland Bridge is pure go-slow today and you're already late for work.",
     choices: [
       {
@@ -358,7 +361,7 @@ export const LIFE_EVENTS: LifeEvent[] = [
   },
   {
     id: "church-harvest",
-    bands: ["adult", "teen"],
+    bands: ["adult", "teen", "elder"],
     prompt: "It's harvest Sunday and the offering basket is making its rounds.",
     choices: [
       {
@@ -375,7 +378,7 @@ export const LIFE_EVENTS: LifeEvent[] = [
   },
   {
     id: "akara-stall-trouble",
-    bands: ["adult"],
+    bands: ["adult", "elder"],
     prompt: "You pass a food seller's stall being harassed by market touts demanding a \"levy.\" A small crowd is watching.",
     choices: [
       {
@@ -392,7 +395,7 @@ export const LIFE_EVENTS: LifeEvent[] = [
   },
   {
     id: "promotion-chance",
-    bands: ["adult"],
+    bands: ["adult", "elder"],
     prompt: "Your boss hints there's a promotion coming, but says it depends on \"who shows loyalty.\"",
     choices: [
       {
@@ -409,7 +412,7 @@ export const LIFE_EVENTS: LifeEvent[] = [
   },
   {
     id: "owambe-invite",
-    bands: ["adult", "teen"],
+    bands: ["adult", "teen", "elder"],
     prompt: "You're invited to a big owambe party this weekend — new aso-ebi required, ₦25,000 for the fabric and tailoring.",
     choices: [
       {
@@ -427,7 +430,7 @@ export const LIFE_EVENTS: LifeEvent[] = [
   },
   {
     id: "landlord-rent",
-    bands: ["adult"],
+    bands: ["adult", "elder"],
     prompt: "Your landlord raises the rent again, with no warning.",
     choices: [
       {
@@ -444,7 +447,7 @@ export const LIFE_EVENTS: LifeEvent[] = [
   },
   {
     id: "sibling-school-fees",
-    bands: ["adult"],
+    bands: ["adult", "elder"],
     prompt: "Your younger sibling's school fees (₦60,000) are due and your parents are short.",
     choices: [
       {
@@ -462,7 +465,7 @@ export const LIFE_EVENTS: LifeEvent[] = [
   },
   {
     id: "health-scare",
-    bands: ["adult"],
+    bands: ["adult", "elder"],
     prompt: "You've been feeling run down for weeks and finally see a doctor.",
     choices: [
       {
@@ -480,7 +483,7 @@ export const LIFE_EVENTS: LifeEvent[] = [
   },
   {
     id: "borehole-opportunity",
-    bands: ["adult"],
+    bands: ["adult", "elder"],
     prompt: "A driller working your street offers to sink a borehole for your compound — ₦250,000, done in a week.",
     choices: [
       {
@@ -499,7 +502,7 @@ export const LIFE_EVENTS: LifeEvent[] = [
   },
   {
     id: "water-scarcity",
-    bands: ["adult"],
+    bands: ["adult", "elder"],
     prompt: "Dry season — the compound tap has run dry and everyone's buying water.",
     choices: [
       {
@@ -517,7 +520,7 @@ export const LIFE_EVENTS: LifeEvent[] = [
   },
   {
     id: "omo-onile-dispute",
-    bands: ["adult"],
+    bands: ["adult", "elder"],
     prompt: "You go to view a plot of land. Before you've even finished looking, \"omo-onile\" youths show up demanding an \"access fee.\"",
     choices: [
       {
@@ -534,7 +537,7 @@ export const LIFE_EVENTS: LifeEvent[] = [
   },
   {
     id: "burial-contribution",
-    bands: ["adult"],
+    bands: ["adult", "elder"],
     prompt: "A relative has passed, and the family is pooling money for the burial — your share comes to ₦30,000.",
     choices: [
       {
@@ -552,7 +555,7 @@ export const LIFE_EVENTS: LifeEvent[] = [
   },
   {
     id: "wedding-costs",
-    bands: ["adult"],
+    bands: ["adult", "elder"],
     prompt: "You're getting married. The question is how big.",
     choices: [
       {
@@ -570,7 +573,7 @@ export const LIFE_EVENTS: LifeEvent[] = [
   },
   {
     id: "keke-dispute",
-    bands: ["adult"],
+    bands: ["adult", "elder"],
     prompt: "The keke rider tries to charge double, claiming \"fuel don cost.\"",
     choices: [
       {
@@ -587,7 +590,7 @@ export const LIFE_EVENTS: LifeEvent[] = [
   },
   {
     id: "market-levy",
-    bands: ["adult"],
+    bands: ["adult", "elder"],
     prompt: "Touts show up at your stall demanding a daily \"levy\" — again.",
     choices: [
       {
@@ -604,7 +607,7 @@ export const LIFE_EVENTS: LifeEvent[] = [
   },
   {
     id: "flood-damage",
-    bands: ["adult"],
+    bands: ["adult", "elder"],
     prompt: "Heavy rain floods the compound overnight. Water got into the room.",
     choices: [
       {
@@ -622,7 +625,7 @@ export const LIFE_EVENTS: LifeEvent[] = [
   },
   {
     id: "danfo-breakdown",
-    bands: ["adult"],
+    bands: ["adult", "elder"],
     prompt: "The danfo breaks down in the middle of traffic. Everyone's filing out.",
     choices: [
       {
@@ -639,7 +642,7 @@ export const LIFE_EVENTS: LifeEvent[] = [
   },
   {
     id: "apartment-hunting-fees",
-    bands: ["adult"],
+    bands: ["adult", "elder"],
     prompt: "You've found a decent apartment, but the agent wants a full year's rent plus 10% agency and 10% legal fees — all at once.",
     choices: [
       {
@@ -657,7 +660,7 @@ export const LIFE_EVENTS: LifeEvent[] = [
   },
   {
     id: "okada-ban",
-    bands: ["adult"],
+    bands: ["adult", "elder"],
     prompt: "The state bans okada on your usual route again — no warning, just a checkpoint turning bikes back.",
     choices: [
       {
@@ -674,7 +677,7 @@ export const LIFE_EVENTS: LifeEvent[] = [
   },
   {
     id: "pickpocket",
-    bands: ["adult", "teen"],
+    bands: ["adult", "teen", "elder"],
     prompt: "The BRT is packed shoulder to shoulder. By the time you notice, your pocket's already lighter.",
     choices: [
       {
@@ -698,7 +701,7 @@ export const LIFE_EVENTS: LifeEvent[] = [
   },
   {
     id: "mosque-giving",
-    bands: ["adult", "teen"],
+    bands: ["adult", "teen", "elder"],
     prompt: "It's Jumat, and the collection is going round after prayers.",
     choices: [
       {
@@ -715,7 +718,7 @@ export const LIFE_EVENTS: LifeEvent[] = [
   },
   {
     id: "salary-delay",
-    bands: ["adult"],
+    bands: ["adult", "elder"],
     prompt: "Payday comes and goes. The office says it's \"a network issue\" — again.",
     choices: [
       {
@@ -732,7 +735,7 @@ export const LIFE_EVENTS: LifeEvent[] = [
   },
   {
     id: "malaria",
-    bands: ["child", "teen", "adult"],
+    bands: ["child", "teen", "adult", "elder"],
     prompt: "The fever hits hard — malaria again, probably from the standing water near the compound.",
     choices: [
       {
@@ -750,7 +753,7 @@ export const LIFE_EVENTS: LifeEvent[] = [
   },
   {
     id: "village-remittance",
-    bands: ["adult"],
+    bands: ["adult", "elder"],
     prompt: "End of year, and the village union calls — it's time for the annual development levy.",
     choices: [
       {
@@ -768,7 +771,7 @@ export const LIFE_EVENTS: LifeEvent[] = [
   },
   {
     id: "armed-robbery",
-    bands: ["adult"],
+    bands: ["adult", "elder"],
     prompt: "Armed men stop your car at a quiet junction. \"Oga, everything you get, bring am.\"",
     choices: [
       {
@@ -953,7 +956,7 @@ export const LIFE_EVENTS: LifeEvent[] = [
   },
   {
     id: "business-partnership",
-    bands: ["adult"],
+    bands: ["adult", "elder"],
     prompt: "A well-connected acquaintance offers you a stake in a small logistics business — ₦2,000,000 for a share of a delivery fleet.",
     choices: [
       {
@@ -972,7 +975,7 @@ export const LIFE_EVENTS: LifeEvent[] = [
   },
   {
     id: "tax-audit",
-    bands: ["adult"],
+    bands: ["adult", "elder"],
     prompt: "A tax officer shows up with a letter about three years of your returns.",
     choices: [
       {
@@ -990,7 +993,7 @@ export const LIFE_EVENTS: LifeEvent[] = [
   },
   {
     id: "kidnap-scare",
-    bands: ["adult"],
+    bands: ["adult", "elder"],
     prompt: "A man in your circle was kidnapped for ransom last week. Your driver suggests varying your routes.",
     choices: [
       {
@@ -1015,7 +1018,7 @@ export const LIFE_EVENTS: LifeEvent[] = [
   },
   {
     id: "charity-gala",
-    bands: ["adult"],
+    bands: ["adult", "elder"],
     prompt: "You're invited to a charity gala where everyone knows exactly how much everyone else gives.",
     choices: [
       {
@@ -1033,7 +1036,7 @@ export const LIFE_EVENTS: LifeEvent[] = [
   },
   {
     id: "staff-fraud",
-    bands: ["adult"],
+    bands: ["adult", "elder"],
     prompt: "Your driver has been padding the fuel receipts for months.",
     choices: [
       {
@@ -1050,7 +1053,7 @@ export const LIFE_EVENTS: LifeEvent[] = [
   },
   {
     id: "island-party",
-    bands: ["adult"],
+    bands: ["adult", "elder"],
     prompt: "A yacht party on the lagoon this weekend — guest list by invitation only.",
     choices: [
       {
@@ -1067,7 +1070,7 @@ export const LIFE_EVENTS: LifeEvent[] = [
   },
   {
     id: "ramadan-fast",
-    bands: ["adult", "teen"],
+    bands: ["adult", "teen", "elder"],
     prompt: "Ramadan begins, and the days are long in the Lagos heat.",
     choices: [
       {
@@ -1084,7 +1087,7 @@ export const LIFE_EVENTS: LifeEvent[] = [
   },
   {
     id: "christmas-village-trip",
-    bands: ["adult", "teen"],
+    bands: ["adult", "teen", "elder"],
     prompt: "December arrives, and the whole family is travelling to the village for Christmas.",
     choices: [
       {
@@ -1102,7 +1105,7 @@ export const LIFE_EVENTS: LifeEvent[] = [
   },
   {
     id: "new-yam-festival",
-    bands: ["adult", "teen"],
+    bands: ["adult", "teen", "elder"],
     prompt: "The new yam festival is back in your family's hometown, and the elders expect you to bring something for the feast.",
     choices: [
       {
@@ -1120,7 +1123,7 @@ export const LIFE_EVENTS: LifeEvent[] = [
   },
   {
     id: "faith-questions",
-    bands: ["adult"],
+    bands: ["adult", "elder"],
     prompt: "At a family gathering, an aunty asks pointedly why she never sees you at any place of worship.",
     choices: [
       {
@@ -1137,7 +1140,7 @@ export const LIFE_EVENTS: LifeEvent[] = [
   },
   {
     id: "pos-float-shortage",
-    bands: ["adult"],
+    bands: ["adult", "elder"],
     prompt: "A network failure leaves your POS float short after a long queue of customers.",
     choices: [
       {
@@ -1155,7 +1158,7 @@ export const LIFE_EVENTS: LifeEvent[] = [
   },
   {
     id: "pos-reversal-dispute",
-    bands: ["adult"],
+    bands: ["adult", "elder"],
     prompt: "A customer claims a transfer failed and demands a refund — the bank's records say otherwise.",
     choices: [
       {
@@ -1172,7 +1175,7 @@ export const LIFE_EVENTS: LifeEvent[] = [
   },
   {
     id: "logistics-truck-breakdown",
-    bands: ["adult"],
+    bands: ["adult", "elder"],
     prompt: "One of your delivery trucks breaks down mid-route with a client's goods on board.",
     choices: [
       {
@@ -1185,6 +1188,215 @@ export const LIFE_EVENTS: LifeEvent[] = [
         label: "Hire another truck for the day",
         result: "The delivery makes it, with a long phone call of apologies.",
         delta: { naira: -40000, happiness: -1 },
+      },
+    ],
+  },
+  {
+    id: "grandchildren-visit",
+    bands: ["elder"],
+    prompt: "Your grandchildren are around for the weekend, full of noise and questions.",
+    choices: [
+      {
+        label: "Spoil them with treats and stories",
+        result: "They leave sugar-high and happy; you're exhausted but glowing.",
+        delta: { naira: -8000, happiness: 4 },
+      },
+      {
+        label: "Keep it simple — just your company",
+        result: "They remember the time, not the money spent on it.",
+        delta: { happiness: 2 },
+      },
+    ],
+  },
+  {
+    id: "chieftaincy-title",
+    bands: ["elder"],
+    prompt: "The community elders offer you a chieftaincy title — an honour, but not a free one.",
+    choices: [
+      {
+        label: "Accept — pay the installation costs",
+        result: "You're installed with drumming and praise names. Respect follows you everywhere now.",
+        delta: { naira: -1500000, happiness: 6 },
+        requiresNaira: 1500000,
+      },
+      {
+        label: "Decline, respectfully",
+        result: "Some call it humility; others whisper you couldn't afford it.",
+        delta: { happiness: -1 },
+      },
+    ],
+  },
+  {
+    id: "burial-society-dues",
+    bands: ["elder"],
+    prompt: "Your age-grade burial society collects its annual dues — everyone contributes toward whoever goes next.",
+    choices: [
+      {
+        label: "Pay your share",
+        result: "A grim bit of bookkeeping, but it's how the community takes care of its own.",
+        delta: { naira: -15000, happiness: 1 },
+      },
+      {
+        label: "Skip it this year",
+        result: "Word gets around. A few old friends go quiet on you.",
+        delta: { happiness: -2 },
+      },
+    ],
+  },
+  {
+    id: "estate-planning",
+    bands: ["elder"],
+    prompt: "A lawyer friend suggests you finally put your affairs in writing.",
+    choices: [
+      {
+        label: "Draw up a proper will",
+        result: "It costs you, but it's one less thing hanging over the family's head.",
+        delta: { naira: -60000, happiness: 2 },
+        requiresNaira: 60000,
+      },
+      {
+        label: "Leave it for now",
+        result: "You'll get to it. Probably.",
+        delta: { happiness: -1 },
+      },
+    ],
+  },
+  {
+    id: "elder-scam-call",
+    bands: ["elder"],
+    prompt: "A stranger calls claiming to be your bank, asking you to confirm your account details urgently.",
+    choices: [
+      {
+        label: "Hang up and call the bank yourself",
+        result: "The bank confirms it was a scam call — you dodged it.",
+        delta: { happiness: 1 },
+      },
+      {
+        label: "It sounds convincing — you give the details",
+        result: "By morning, a chunk of your savings is gone.",
+        delta: { naira: -200000, happiness: -5 },
+      },
+    ],
+  },
+  {
+    id: "routine-checkup",
+    bands: ["elder"],
+    prompt: "It's time for your yearly medical checkup — the kind you keep putting off.",
+    choices: [
+      {
+        label: "Go through with the full checkup",
+        result: "Nothing major, but the doctor catches a small issue early.",
+        delta: { naira: -25000, health: 4 },
+        requiresNaira: 25000,
+      },
+      {
+        label: "Skip it — you feel fine",
+        result: "Fine for now. Maybe next year.",
+        delta: { health: -2 },
+      },
+    ],
+  },
+  {
+    id: "downsize-the-house",
+    bands: ["elder"],
+    prompt: "The house feels too big and too quiet these days. An agent suggests downsizing.",
+    choices: [
+      {
+        label: "Sell up and move somewhere smaller",
+        result: "Less to maintain, and a tidy sum left over.",
+        delta: { naira: 4500000, happiness: 2 },
+      },
+      {
+        label: "Stay — too many memories here",
+        result: "The upkeep is a lot, but it's home.",
+        delta: { naira: -50000, happiness: 1 },
+      },
+    ],
+  },
+  {
+    id: "mentor-at-work",
+    bands: ["elder"],
+    prompt: "A younger colleague keeps coming to you for advice on how things really work.",
+    choices: [
+      {
+        label: "Take them under your wing properly",
+        result: "Watching them grow reminds you why you ever liked this job.",
+        delta: { happiness: 3 },
+      },
+      {
+        label: "Give quick answers and move on",
+        result: "You're too tired these days for a full mentorship.",
+        delta: { happiness: 0 },
+      },
+    ],
+  },
+  {
+    id: "community-council-invite",
+    bands: ["elder"],
+    prompt: "The local community development council wants your voice on their panel.",
+    choices: [
+      {
+        label: "Join — your experience could help",
+        result: "Meetings run long, but you help settle a real dispute over market stalls.",
+        delta: { naira: -5000, happiness: 3 },
+      },
+      {
+        label: "Decline — you'd rather rest",
+        result: "You hear about the meetings secondhand instead.",
+        delta: { happiness: 0 },
+      },
+    ],
+  },
+  {
+    id: "old-friends-reunion",
+    bands: ["elder"],
+    prompt: "A handful of old schoolmates organize a reunion — some you haven't seen in decades.",
+    choices: [
+      {
+        label: "Go, and contribute toward the venue",
+        result: "Old jokes, older stories, and a night that makes you feel young again.",
+        delta: { naira: -20000, happiness: 5 },
+      },
+      {
+        label: "Send your regards instead",
+        result: "You hear it was a good time. You half-regret missing it.",
+        delta: { happiness: -1 },
+      },
+    ],
+  },
+  {
+    id: "village-land-dispute",
+    bands: ["elder"],
+    prompt: "A relative claims your late father's village land was never properly shared, and wants your share back.",
+    choices: [
+      {
+        label: "Hire a lawyer and fight for your claim",
+        result: "A long, tiring process, but the land stays yours on paper.",
+        delta: { naira: -180000, happiness: -2 },
+        requiresNaira: 180000,
+      },
+      {
+        label: "Let it go for the sake of peace",
+        result: "The family stays close. The land doesn't.",
+        delta: { happiness: 1 },
+      },
+    ],
+  },
+  {
+    id: "grandchild-school-fees",
+    bands: ["elder"],
+    prompt: "Your daughter calls — she's short for your grandchild's school fees this term.",
+    choices: [
+      {
+        label: "Cover it",
+        result: "The relief in her voice is worth more than the money.",
+        delta: { naira: -90000, happiness: 3 },
+        requiresNaira: 90000,
+      },
+      {
+        label: "Explain you can't manage it this time",
+        result: "She understands, but it stings to say no.",
+        delta: { happiness: -2 },
       },
     ],
   },

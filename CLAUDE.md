@@ -272,6 +272,29 @@ the single surviving mode, `src/ui/LifeSim.tsx`.
   (babies don't make choices or hold conversations); capped at
   `MAX_CLASSROOM_TALKS_PER_YEAR` (3), reset every `ageUp` like every
   other per-year counter in this file.
+- Elder band (60+): `bandForAge` in `lifeEvents.ts` used to collapse
+  everything 18+ into `"adult"`, so the ~35 adult events exhausted after
+  about 7 years and then just repeated for decades. `AgeBand` now
+  includes `"elder"`, cut at the same age 60 as `RETIREMENT_AGE` and
+  `LIFE_STAGES`' own elder band start. An elder still draws from the full
+  adult event/chore pools (every `bands: [...]` array that included
+  `"adult"` had `"elder"` appended, rather than forking a parallel pool)
+  plus 12 new elder-only events in `LIFE_EVENTS`
+  (`grandchildren-visit`, `chieftaincy-title`, `burial-society-dues`,
+  `estate-planning`, `elder-scam-call`, `routine-checkup`,
+  `downsize-the-house`, `mentor-at-work`, `community-council-invite`,
+  `old-friends-reunion`, `village-land-dispute`,
+  `grandchild-school-fees`) — grandchildren, legacy/estate concerns, and
+  the kind of scam calls that specifically target older people, on the
+  same real-Naira scale as everything else. Three of them are gated via
+  `EVENT_RULES` the same way every other gated event is: `chieftaincy-
+  title` needs `minNaira`, `downsize-the-house` needs `requiresOwned:
+  ["home"]`, `mentor-at-work` needs `requiresJob`.
+  `CHORES_PER_YEAR_BY_BAND`/`EVENTS_PER_YEAR_BY_BAND` give elder the same
+  4/5 load as adult, and `AGE_UP_REQUIREMENTS.elder` matches `.adult`
+  exactly (an elder still has to earn, spend, and eat to age up — nothing
+  about retirement waives that, since `retire()`'s pension income counts
+  toward `earnedThisYear` the same as job income does).
 - Retirement/pension: `RETIREMENT_AGE` (60, matching both the real
   Nigerian Contributory Pension Scheme's civil-service retirement age and
   `LIFE_STAGES`' "elder" band start — not a coincidence) is when the
